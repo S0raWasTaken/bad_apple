@@ -1,4 +1,4 @@
-# bad_apple
+# Bad Apple
 An asciinema compiler.
 
 This project was made as a helper to compile videos into asciinema, mainly focused in making the [bad apple](https://www.youtube.com/watch?v=UkgK8eUdpAo) video play on a text interface (TTY/framebuffer/console/etc).
