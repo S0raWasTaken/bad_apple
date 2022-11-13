@@ -29,4 +29,4 @@ asciix bad_apple.mp4 30 # frames per second
 ```
 
 ## Copying
-Read [here](../README.md)
+Read [here](https://github.com/S0raWasTaken/bad_apple#copying)
