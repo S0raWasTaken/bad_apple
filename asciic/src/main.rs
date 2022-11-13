@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic)]
 use std::{
+    error::Error,
     fs::{create_dir, read_dir, File},
     io::Write,
     path::PathBuf,
@@ -15,7 +16,7 @@ use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use temp_dir::TempDir;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let matches = cli().get_matches();
     let redimension = matches.get_one::<OutputSize>("frame-size").unwrap();
 
@@ -91,13 +92,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn ffmpeg(args: &[&str]) -> std::io::Result<()> {
-    Command::new("ffmpeg")
+fn ffmpeg(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let output = Command::new("ffmpeg")
         .args(args)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .output()?;
+
+    if !output.status.success() {
+        return Err("FFMPEG failed to run".into());
+    }
 
     Ok(())
 }
