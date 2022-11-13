@@ -9,4 +9,4 @@ const FRAMES: &[&str] = link_frames!("path/to/frames/dir");
 ```
 
 ## Copying
-Read [here](../README.md).
+Read [here](https://github.com/S0raWasTaken/bad_apple#copying).
