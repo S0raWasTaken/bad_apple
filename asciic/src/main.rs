@@ -20,10 +20,11 @@ use yansi::{Color, Paint};
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = cli().get_matches();
     let redimension = matches.get_one::<OutputSize>("frame-size").unwrap();
+    let colorize = matches.contains_id("colorize");
 
     if let Some(image) = matches.get_one::<String>("image") {
         let image_path = PathBuf::from_str(image)?;
-        let processed_img = process_image(&image_path, *redimension)?;
+        let processed_img = process_image(&image_path, *redimension, colorize)?;
 
         File::create(format!(
             "{}.txt",
@@ -68,7 +69,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect::<Vec<PathBuf>>() // If you don't want this parallelized,
         .into_par_iter() // . . . . . Remove this two lines.
         .for_each(|image| {
-            let processed = process_image(&image, *redimension).unwrap();
+            let processed = process_image(&image, *redimension, colorize).unwrap();
 
             if !output_dir.exists() {
                 create_dir(output_dir).unwrap();
@@ -108,7 +109,11 @@ fn ffmpeg(args: &[&str]) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn process_image(image: &PathBuf, redimension: OutputSize) -> Result<String, ImageError> {
+fn process_image(
+    image: &PathBuf,
+    redimension: OutputSize,
+    colorize: bool,
+) -> Result<String, ImageError> {
     let image = Reader::open(image)?.decode()?;
 
     let resized_image = image.resize_exact(redimension.0, redimension.1, FilterType::Nearest);
@@ -127,8 +132,11 @@ fn process_image(image: &PathBuf, redimension: OutputSize) -> Result<String, Ima
 
             let mut colorize = |input: char| {
                 let color = Color::RGB(r, g, b);
-
-                res.push_str(Paint::new(input).fg(color).to_string().as_str());
+                if colorize {
+                    res.push_str(Paint::new(input).fg(color).to_string().as_str());
+                } else {
+                    res.push_str(input.to_string().as_str());
+                }
             };
 
             match r {
@@ -214,7 +222,6 @@ fn cli() -> Clap<'static> {
                 .help("Input video to transform in asciinema")
                 .takes_value(true),
             Arg::new("output-dir")
-                .takes_value(true)
                 .value_parser(value_parser!(PathBuf))
                 .required_unless_present("image")
                 .help("Output directory\nCreates a directory if it doesn't exist")
@@ -231,5 +238,9 @@ fn cli() -> Clap<'static> {
                 .short('i')
                 .takes_value(true)
                 .help("compiles a single image"),
+            Arg::new("colorize")
+                .id("colorize")
+                .short('c')
+                .help("Colorize output"),
         ])
 }
