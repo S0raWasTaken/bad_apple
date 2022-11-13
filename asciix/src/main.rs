@@ -45,7 +45,7 @@ fn audio(frames_dir: &PathBuf) {
         Shell::new("mpv")
             .args(format!("{dir_name}/audio.mp3").split_ascii_whitespace())
             .output()
-            .unwrap();
+            .ok();
     }
 }
 
