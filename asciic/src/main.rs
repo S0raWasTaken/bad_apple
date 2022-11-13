@@ -11,9 +11,10 @@ use clap::{
     builder::{TypedValueParser, ValueParserFactory},
     value_parser, Arg, Command as Clap, ErrorKind,
 };
-use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
+use image::{imageops::FilterType, io::Reader, ImageError};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use temp_dir::TempDir;
+use yansi::{Color, Paint};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = cli().get_matches();
@@ -105,24 +106,35 @@ fn ffmpeg(args: &[&str]) -> std::io::Result<()> {
 fn process_image(image: &PathBuf, redimension: OutputSize) -> Result<String, ImageError> {
     let image = Reader::open(image)?.decode()?;
 
-    let resized_img = image.resize_exact(redimension.0, redimension.1, FilterType::Nearest);
+    let resized_image = image.resize_exact(redimension.0, redimension.1, FilterType::Nearest);
+    let converted_image = resized_image
+        .as_rgb8()
+        .expect("Failed to convert image to RGB");
 
-    let size = resized_img.dimensions();
+    let size = converted_image.dimensions();
 
     let mut res = String::new();
 
     for y in 0..size.1 {
         res.push_str("            ");
         for x in 0..size.0 {
-            match resized_img.get_pixel(x, y)[0] {
-                0..=20 => res.push(' '),
-                21..=40 => res.push('.'),
-                41..=80 => res.push(':'),
-                81..=100 => res.push('-'),
-                101..=130 => res.push('='),
-                131..=200 => res.push('+'),
-                201..=250 => res.push('#'),
-                _ => res.push('@'),
+            let [r, g, b] = converted_image.get_pixel(x, y).0;
+
+            let mut colorize = |input: char| {
+                let color = Color::RGB(r, g, b);
+
+                res.push_str(Paint::new(input).fg(color).to_string().as_str());
+            };
+
+            match r {
+                0..=20 => colorize(' '),
+                21..=40 => colorize('.'),
+                41..=80 => colorize(':'),
+                81..=100 => colorize('-'),
+                101..=130 => colorize('='),
+                131..=200 => colorize('+'),
+                201..=250 => colorize('#'),
+                _ => colorize('@'),
             }
         }
         res.push('\n');
