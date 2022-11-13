@@ -38,17 +38,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(">=== Running FFMPEG ===<");
 
+    dbg!(video_path);
+
     // Split file into frames
-    ffmpeg(&format!(
-        "-r 1 -i {video_path} -r 1 {}/%03d.png",
-        tmp.path().to_str().unwrap()
-    ))?;
+    ffmpeg(&[
+        "-r",
+        "1",
+        "-i",
+        video_path,
+        "-r",
+        "1",
+        &format!("{}/%03d.png", tmp.path().to_str().unwrap()),
+    ])?;
 
     // Extract audio
-    ffmpeg(&format!(
-        "-i {video_path} {}/audio.mp3",
-        output_dir.to_str().unwrap()
-    ))?;
+    ffmpeg(&[
+        "-i",
+        video_path,
+        &format!("{}/audio.mp3", output_dir.to_str().unwrap()),
+    ])?;
 
     let frames = read_dir(tmp.path())?;
 
@@ -83,9 +91,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn ffmpeg(args: &str) -> std::io::Result<()> {
+fn ffmpeg(args: &[&str]) -> std::io::Result<()> {
     Command::new("ffmpeg")
-        .args(args.split_ascii_whitespace())
+        .args(args)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
