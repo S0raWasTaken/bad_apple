@@ -153,7 +153,6 @@ impl TypedValueParser for OutputSizeParser {
             .to_ascii_lowercase();
 
         let vals = value.split('x').collect::<Vec<_>>();
-        dbg!(&vals.len());
         if vals.len() != 2 {
             return Err(cmd
                 .clone()
