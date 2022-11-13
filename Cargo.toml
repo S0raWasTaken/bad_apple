@@ -1,15 +1,9 @@
-[package]
-name = "bad_apple"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-clap = "3.2.22"
-image = "0.24.4"
-rayon = "1.5.3"
-temp-dir = "0.1.11"
+[workspace]
+members = [
+	"asciic",
+	"asciild",
+	"asciix"
+]
 
 [profile.dev]
 panic = "abort"
