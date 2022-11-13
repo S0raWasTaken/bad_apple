@@ -130,7 +130,7 @@ fn process_image(
                 if colorize {
                     res.push_str(Paint::new(input).fg(color).to_string().as_str());
                 } else {
-                    res.push_str(input.to_string().as_str())
+                    res.push_str(input.to_string().as_str());
                 }
             };
 
