@@ -45,3 +45,6 @@ asciic video.mp4 output-dir/ -i 500x150
 # This command gives out a warning about things getting wonky at high image sizes,
 # but you can safely ignore them if you want :)
 ```
+
+## Copying
+Read [here](https://github.com/S0raWasTaken/bad_apple#copying)
