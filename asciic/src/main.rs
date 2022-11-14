@@ -20,6 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let redimension = matches.get_one::<OutputSize>("frame-size").unwrap();
     let colorize = matches.contains_id("colorize");
     let skip_compression = matches.contains_id("no-compression");
+    let paint_fg = matches.contains_id("paint-fg");
     let compression_threshold = matches.get_one::<u8>("compression-threshold").unwrap();
 
     if let Some(image) = matches.get_one::<String>("image") {
@@ -29,6 +30,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             *redimension,
             colorize,
             skip_compression,
+            paint_fg,
             *compression_threshold,
         )?;
 
@@ -81,6 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 *redimension,
                 colorize,
                 skip_compression,
+                paint_fg,
                 *compression_threshold,
             ) {
                 Ok(p) => p,
@@ -122,6 +125,7 @@ fn process_image(
     redimension: OutputSize,
     colorize: bool,
     skip_compression: bool,
+    paint_fg: bool,
     threshold: u8,
 ) -> Result<String, ImageError> {
     let image = Reader::open(image)?.decode()?;
@@ -131,8 +135,8 @@ fn process_image(
     let size = resized_image.dimensions();
 
     let mut res = String::new();
-
     let mut last_pixel_rgb = resized_image.get_pixel(size.0 - 1, size.1 - 1);
+    let mut is_first_row_pixel = true;
 
     for y in 0..size.1 {
         res.push_str("            ");
@@ -145,10 +149,14 @@ fn process_image(
                         || max_sub(last_pixel_rgb[1], g) > threshold
                         || max_sub(last_pixel_rgb[2], b) > threshold))
                     || skip_compression
+                    || is_first_row_pixel
                 {
-                    res.push_str(&format!("\x1b[38;2;{r};{g};{b}m{input}"));
+                    res.push_str(&format!(
+                        "\x1b[{}8;2;{r};{g};{b}m{input}",
+                        if paint_fg { 3 } else { 4 }
+                    ));
                 } else {
-                    res.push_str(&input.to_string());
+                    res.push(input);
                 }
             };
 
@@ -164,8 +172,10 @@ fn process_image(
             }
 
             last_pixel_rgb.0 = [r, g, b, 255];
+            is_first_row_pixel = false;
         }
-        res.push('\n');
+        res.push_str("\x1b[0m\n");
+        is_first_row_pixel = true;
     }
 
     Ok(res)

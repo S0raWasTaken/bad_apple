@@ -127,5 +127,9 @@ pub fn cli() -> Clap<'static> {
                 .takes_value(true)
                 .value_parser(value_parser!(u8))
                 .help("Manually sets the compression threshold"),
+            Arg::new("paint-fg")
+                .long("paint-fg")
+                .requires("colorize")
+                .help("Paints the foreground instead of background"),
         ])
 }
