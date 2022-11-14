@@ -1,9 +1,10 @@
 #![warn(clippy::pedantic)]
 use std::{
     error::Error,
-    fs::{create_dir, read_dir, File},
+    fs::{create_dir, read_dir, remove_dir_all, File},
     io::Write,
     path::PathBuf,
+    process::exit,
     str::FromStr,
 };
 
@@ -43,6 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_dir = matches.get_one::<PathBuf>("output-dir").unwrap();
 
     let tmp = TempDir::new()?;
+    let tmp_path = tmp.path();
 
     println!(">=== Running FFMPEG ===<");
 
@@ -66,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &format!("{}/audio.mp3", output_dir.to_str().unwrap()),
     ])?;
 
-    let frames = read_dir(tmp.path())?;
+    let frames = read_dir(tmp_path)?;
 
     frames
         .filter_map(Result::ok)
@@ -74,14 +76,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect::<Vec<PathBuf>>() // If you don't want this parallelized,
         .into_par_iter() // . . . . . Remove this two lines.
         .for_each(|image| {
-            let processed = process_image(
+            let processed = match process_image(
                 &image,
                 *redimension,
                 colorize,
                 skip_compression,
                 *compression_threshold,
-            )
-            .unwrap();
+            ) {
+                Ok(p) => p,
+                Err(error) => {
+                    eprintln!("Image processing failed. This is probably an ffmpeg related issue");
+                    eprintln!("You should try rerunning this program.");
+                    eprintln!("In any case, here's the error message: \n\n{error:?}");
+
+                    remove_dir_all(tmp_path).unwrap(); // Prevents littering /tmp when image processing fails
+                    exit(1);
+                }
+            };
 
             if !output_dir.exists() {
                 create_dir(output_dir).unwrap();
