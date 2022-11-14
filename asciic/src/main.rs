@@ -1,27 +1,35 @@
 #![warn(clippy::pedantic)]
 use std::{
+    error::Error,
     fs::{create_dir, read_dir, File},
     io::Write,
     path::PathBuf,
-    process::{Command, Stdio},
     str::FromStr,
 };
 
-use clap::{
-    builder::{TypedValueParser, ValueParserFactory},
-    value_parser, Arg, Command as Clap, ErrorKind,
-};
 use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use temp_dir::TempDir;
+use util::{cli, ffmpeg, max_sub, OutputSize};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+mod util;
+
+fn main() -> Result<(), Box<dyn Error>> {
     let matches = cli().get_matches();
     let redimension = matches.get_one::<OutputSize>("frame-size").unwrap();
+    let colorize = matches.contains_id("colorize");
+    let skip_compression = matches.contains_id("no-compression");
+    let compression_threshold = matches.get_one::<u8>("compression-threshold").unwrap();
 
     if let Some(image) = matches.get_one::<String>("image") {
         let image_path = PathBuf::from_str(image)?;
-        let processed_img = process_image(&image_path, *redimension)?;
+        let processed_img = process_image(
+            &image_path,
+            *redimension,
+            colorize,
+            skip_compression,
+            *compression_threshold,
+        )?;
 
         File::create(format!(
             "{}.txt",
@@ -66,7 +74,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect::<Vec<PathBuf>>() // If you don't want this parallelized,
         .into_par_iter() // . . . . . Remove this two lines.
         .for_each(|image| {
-            let processed = process_image(&image, *redimension).unwrap();
+            let processed = process_image(
+                &image,
+                *redimension,
+                colorize,
+                skip_compression,
+                *compression_threshold,
+            )
+            .unwrap();
 
             if !output_dir.exists() {
                 create_dir(output_dir).unwrap();
@@ -91,128 +106,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn ffmpeg(args: &[&str]) -> std::io::Result<()> {
-    Command::new("ffmpeg")
-        .args(args)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .output()?;
-
-    Ok(())
-}
-
-fn process_image(image: &PathBuf, redimension: OutputSize) -> Result<String, ImageError> {
+fn process_image(
+    image: &PathBuf,
+    redimension: OutputSize,
+    colorize: bool,
+    skip_compression: bool,
+    threshold: u8,
+) -> Result<String, ImageError> {
     let image = Reader::open(image)?.decode()?;
 
-    let resized_img = image.resize_exact(redimension.0, redimension.1, FilterType::Nearest);
+    let resized_image = image.resize_exact(redimension.0, redimension.1, FilterType::Nearest);
 
-    let size = resized_img.dimensions();
+    let size = resized_image.dimensions();
 
     let mut res = String::new();
+
+    let mut last_pixel_rgb = resized_image.get_pixel(size.0 - 1, size.1 - 1);
 
     for y in 0..size.1 {
         res.push_str("            ");
         for x in 0..size.0 {
-            match resized_img.get_pixel(x, y)[0] {
-                0..=20 => res.push(' '),
-                21..=40 => res.push('.'),
-                41..=80 => res.push(':'),
-                81..=100 => res.push('-'),
-                101..=130 => res.push('='),
-                131..=200 => res.push('+'),
-                201..=250 => res.push('#'),
-                _ => res.push('@'),
+            let [r, g, b, _] = resized_image.get_pixel(x, y).0;
+
+            let mut colorize = |input: char| {
+                if (colorize
+                    && (max_sub(last_pixel_rgb[0], r) > threshold
+                        || max_sub(last_pixel_rgb[1], g) > threshold
+                        || max_sub(last_pixel_rgb[2], b) > threshold))
+                    || skip_compression
+                {
+                    res.push_str(&format!("\x1b[38;2;{r};{g};{b}m{input}"));
+                } else {
+                    res.push_str(&input.to_string());
+                }
+            };
+
+            match r {
+                0..=20 => colorize(' '),
+                21..=40 => colorize('.'),
+                41..=80 => colorize(':'),
+                81..=100 => colorize('-'),
+                101..=130 => colorize('='),
+                131..=200 => colorize('+'),
+                201..=250 => colorize('#'),
+                _ => colorize('@'),
             }
+
+            last_pixel_rgb.0 = [r, g, b, 255];
         }
         res.push('\n');
     }
 
     Ok(res)
-}
-
-#[derive(Debug, Clone, Copy)]
-struct OutputSize(pub u32, pub u32);
-impl ValueParserFactory for OutputSize {
-    type Parser = OutputSizeParser;
-
-    fn value_parser() -> Self::Parser {
-        OutputSizeParser
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct OutputSizeParser;
-impl TypedValueParser for OutputSizeParser {
-    type Value = OutputSize;
-
-    fn parse_ref(
-        &self,
-        cmd: &clap::Command,
-        _: Option<&clap::Arg>,
-        value: &std::ffi::OsStr,
-    ) -> Result<Self::Value, clap::Error> {
-        let value = value
-            .to_str()
-            .ok_or_else(|| {
-                cmd.clone()
-                    .error(ErrorKind::InvalidUtf8, "Not UTF8, try 216x56.")
-            })?
-            .to_ascii_lowercase();
-
-        let vals = value.split('x').collect::<Vec<_>>();
-        if vals.len() != 2 {
-            return Err(cmd
-                .clone()
-                .error(ErrorKind::InvalidValue, "Wrong pattern, try 216x56."));
-        }
-        let output_size = OutputSize(
-            vals.first()
-                .unwrap()
-                .parse::<u32>()
-                .map_err(|e| cmd.clone().error(ErrorKind::InvalidValue, e.to_string()))?,
-            vals.last()
-                .unwrap()
-                .parse::<u32>()
-                .map_err(|e| cmd.clone().error(ErrorKind::InvalidValue, e.to_string()))?,
-        );
-
-        if output_size.0 > 400 || output_size.1 > 200 {
-            println!("WARN: Usually going too high on frame size makes stuff a bit wonky.");
-        }
-
-        Ok(output_size)
-    }
-}
-
-fn cli() -> Clap<'static> {
-    Clap::new("asciic")
-        .version("0.1.0")
-        .about("An asciinema compiler")
-        .author("by S0ra")
-        .args([
-            Arg::new("video")
-                .required_unless_present("image")
-                .index(1)
-                .help("Input video to transform in asciinema")
-                .takes_value(true),
-            Arg::new("output-dir")
-                .takes_value(true)
-                .value_parser(value_parser!(PathBuf))
-                .required_unless_present("image")
-                .help("Output directory\nCreates a directory if it doesn't exist")
-                .index(2),
-            Arg::new("frame-size")
-                .short('s')
-                .default_value("216x56")
-                .long("size")
-                .takes_value(true)
-                .required(false)
-                .help("The ratio that each frame should be resized")
-                .value_parser(value_parser!(OutputSize)),
-            Arg::new("image")
-                .short('i')
-                .takes_value(true)
-                .help("compiles a single image"),
-        ])
 }
