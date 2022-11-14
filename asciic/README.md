@@ -22,10 +22,26 @@ ARGS:
                     Creates a directory if it doesn't exist
 
 OPTIONS:
-    -h, --help                 Print help information
-    -i <image>                 compiles a single image
-    -s, --size <frame-size>    The ratio that each frame should be resized [default: 216x56]
-    -V, --version              Print version information
+    -c
+            Colorize output
+
+    -h, --help
+            Print help information
+
+    -i, --image <image>
+            compiles a single image
+
+    -n, --skip-compression
+            disables compression on colored outputs
+
+    -s, --size <frame-size>
+            The ratio that each frame should be resized [default: 216x56]
+
+    -t, --threshold <compression-threshold>
+            Manually sets the compression threshold [default: 10]
+
+    -V, --version
+            Print version information
 ```
 
 Examples:
@@ -34,9 +50,20 @@ Examples:
 asciic video.mp4 output-dir/
 ```
 
+> Compiling a colored video:
+```sh
+asciic -c video.mp4 output-dir/
+```
+
 > Compiling an image:
 ```sh
 asciic -i image.png
+```
+
+> Compiling a colored image:
+```sh
+asciic -i image.png -c --skip-compression
+# We skip the color compression step, since it's a single image
 ```
 
 > Passing the frame size argument:
