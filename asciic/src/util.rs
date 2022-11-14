@@ -84,7 +84,7 @@ impl TypedValueParser for OutputSizeParser {
 
 pub fn cli() -> Clap<'static> {
     Clap::new("asciic")
-        .version("0.1.0")
+        .version("0.3.0")
         .about("An asciinema compiler")
         .author("by S0ra")
         .args([
@@ -110,15 +110,18 @@ pub fn cli() -> Clap<'static> {
                 .value_parser(value_parser!(OutputSize)),
             Arg::new("image")
                 .short('i')
+                .long("image")
                 .takes_value(true)
-                .help("compiles a single image"),
+                .help("Compiles a single image"),
             Arg::new("colorize").short('c').help("Colorize output"),
             Arg::new("no-compression")
                 .short('n')
-                .help("disables compression on colored outputs")
+                .long("skip-compression")
+                .help("Disables compression on colored outputs")
                 .requires("colorize"),
             Arg::new("compression-threshold")
                 .short('t')
+                .long("threshold")
                 .default_value("10")
                 .requires("colorize")
                 .takes_value(true)
