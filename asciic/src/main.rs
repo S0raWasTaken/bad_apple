@@ -147,9 +147,9 @@ fn process_image(
                 if (colorize
                     && (max_sub(last_pixel_rgb[0], r) > threshold
                         || max_sub(last_pixel_rgb[1], g) > threshold
-                        || max_sub(last_pixel_rgb[2], b) > threshold))
+                        || max_sub(last_pixel_rgb[2], b) > threshold
+                        || is_first_row_pixel))
                     || skip_compression
-                    || is_first_row_pixel
                 {
                     res.push_str(&format!(
                         "\x1b[{}8;2;{r};{g};{b}m{input}",
