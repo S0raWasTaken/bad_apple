@@ -6,6 +6,9 @@ use std::{
     path::PathBuf,
     process::exit,
     str::FromStr,
+    sync::{mpsc, Arc, Mutex},
+    thread,
+    time::{Duration, Instant},
 };
 
 use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
@@ -85,12 +88,53 @@ fn main() -> Result<(), Box<dyn Error>> {
         )?;
     }
 
-    let frames = read_dir(tmp_path)?;
-
-    frames
+    let frames = read_dir(tmp_path)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .collect::<Vec<PathBuf>>() // If you don't want this parallelized,
+        .collect::<Vec<PathBuf>>();
+
+    println!();
+    println!("Starting frame generation ...");
+
+    let (tx, rx) = mpsc::channel();
+    let total = frames.len();
+
+    thread::spawn(move || {
+        let mut now = 0;
+        let mut average = 0;
+        let mut time = Instant::now();
+        let mut etas = vec![];
+        let mut eta = 0;
+
+        loop {
+            while let Ok(_) = rx.try_recv() {
+                now += 1;
+                average += 1;
+
+                print!(
+                    "\rProcessing: {}% {}/{} (ETA: {eta}s)",
+                    (100 * now) / total,
+                    now,
+                    total
+                );
+            }
+
+            if time.elapsed() >= Duration::from_secs(1) {
+                etas.push(total.checked_div(average).unwrap_or_default());
+                average = 0;
+                time = Instant::now();
+            }
+
+            if etas.len() > 5 {
+                eta = etas.iter().sum::<usize>() / etas.len();
+            }
+        }
+    });
+
+    let tx = Arc::new(Mutex::new(tx));
+
+    frames
+        // If you don't want this parallelized,
         .into_par_iter() // . . . . . Remove this two lines.
         .for_each(|image| {
             let processed = match process_image(
@@ -112,12 +156,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             };
 
-            let mut output = File::create(format!(
+            let out = format!(
                 "{}/{}.txt",
                 output_dir.to_str().unwrap(),
                 image.file_stem().unwrap().to_str().unwrap()
-            ))
-            .unwrap();
+            );
+
+            let mut output = File::create(out).unwrap();
+
+            tx.clone()
+                .lock()
+                .unwrap()
+                .send(())
+                .expect("Failed to send out");
 
             output.write_all(processed.as_bytes()).unwrap();
         });
