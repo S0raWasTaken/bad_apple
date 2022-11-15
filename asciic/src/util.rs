@@ -8,9 +8,10 @@ use clap::{
     value_parser, Arg, Command as Clap, ErrorKind,
 };
 
-pub fn ffmpeg(args: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+pub fn ffmpeg(args: &[&str], extra_flags: &[&String]) -> Result<(), Box<dyn std::error::Error>> {
     let output = Command::new("ffmpeg")
         .args(args)
+        .args(extra_flags)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -131,5 +132,15 @@ pub fn cli() -> Clap<'static> {
                 .long("paint-fg")
                 .requires("colorize")
                 .help("Paints the foreground instead of background"),
+            Arg::new("ffmpeg-flags")
+                .index(3)
+                .multiple_occurrences(true)
+                .allow_hyphen_values(true)
+                .takes_value(true)
+                .conflicts_with("image")
+                .multiple_values(true)
+                .value_parser(value_parser!(String))
+                .help("Pass extra flags to ffmpeg")
+                .last(true),
         ])
 }

@@ -22,6 +22,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let skip_compression = matches.contains_id("no-compression");
     let paint_fg = matches.contains_id("paint-fg");
     let compression_threshold = matches.get_one::<u8>("compression-threshold").unwrap();
+    let ffmpeg_flags = matches
+        .get_many::<String>("ffmpeg-flags")
+        .unwrap()
+        .collect::<Vec<_>>();
 
     if let Some(image) = matches.get_one::<String>("image") {
         let image_path = PathBuf::from_str(image)?;
@@ -53,22 +57,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     dbg!(video_path);
 
     // Split file into frames
-    ffmpeg(&[
-        "-r",
-        "1",
-        "-i",
-        video_path,
-        "-r",
-        "1",
-        &format!("{}/%03d.png", tmp.path().to_str().unwrap()),
-    ])?;
+    ffmpeg(
+        &[
+            "-r",
+            "1",
+            "-i",
+            video_path,
+            "-r",
+            "1",
+            &format!("{}/%03d.png", tmp.path().to_str().unwrap()),
+        ],
+        &ffmpeg_flags,
+    )?;
 
     // Extract audio
-    ffmpeg(&[
-        "-i",
-        video_path,
-        &format!("{}/audio.mp3", output_dir.to_str().unwrap()),
-    ])?;
+    ffmpeg(
+        &[
+            "-i",
+            video_path,
+            &format!("{}/audio.mp3", output_dir.to_str().unwrap()),
+        ],
+        &ffmpeg_flags,
+    )?;
 
     let frames = read_dir(tmp_path)?;
 
@@ -174,7 +184,11 @@ fn process_image(
             last_pixel_rgb.0 = [r, g, b, 255];
             is_first_row_pixel = false;
         }
-        res.push_str("\x1b[0m\n");
+        if colorize {
+            res.push_str("\x1b[0m\n");
+        } else {
+            res.push('\n');
+        }
         is_first_row_pixel = true;
     }
 
