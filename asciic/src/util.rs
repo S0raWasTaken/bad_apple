@@ -9,13 +9,18 @@ use clap::{
 };
 
 pub fn ffmpeg(args: &[&str], extra_flags: &[&String]) -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("ffmpeg")
+    let mut command = Command::new("ffmpeg");
+    command
         .args(args)
-        .args(extra_flags)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .output()?;
+        .stderr(Stdio::inherit());
+
+    if !extra_flags.is_empty() {
+        command.args(extra_flags);
+    }
+
+    let output = command.output()?;
 
     if !output.status.success() {
         return Err("FFMPEG failed to run".into());
@@ -133,7 +138,6 @@ pub fn cli() -> Clap<'static> {
                 .requires("colorize")
                 .help("Paints the foreground instead of background"),
             Arg::new("ffmpeg-flags")
-                .default_value("")
                 .index(3)
                 .multiple_occurrences(true)
                 .allow_hyphen_values(true)

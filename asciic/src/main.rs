@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let compression_threshold = matches.get_one::<u8>("compression-threshold").unwrap();
     let ffmpeg_flags = matches
         .get_many::<String>("ffmpeg-flags")
-        .unwrap()
+        .unwrap_or_default()
         .collect::<Vec<_>>();
 
     if let Some(image) = matches.get_one::<String>("image") {
@@ -53,8 +53,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tmp_path = tmp.path();
 
     println!(">=== Running FFMPEG ===<");
-
-    dbg!(video_path);
 
     // Split file into frames
     ffmpeg(
