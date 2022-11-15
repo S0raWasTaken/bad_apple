@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut eta = Duration::from_secs(0);
 
         loop {
-            while let Ok(_) = rx.try_recv() {
+            while rx.try_recv().is_ok() {
                 now += 1;
                 average += 1;
 
