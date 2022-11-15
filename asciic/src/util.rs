@@ -133,6 +133,7 @@ pub fn cli() -> Clap<'static> {
                 .requires("colorize")
                 .help("Paints the foreground instead of background"),
             Arg::new("ffmpeg-flags")
+                .default_value("")
                 .index(3)
                 .multiple_occurrences(true)
                 .allow_hyphen_values(true)
