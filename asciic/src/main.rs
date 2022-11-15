@@ -10,7 +10,7 @@ use std::{
 
 use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use temp_dir::TempDir;
+use tempfile::TempDir;
 use util::{cli, ffmpeg, max_sub, OutputSize};
 
 mod util;
@@ -50,7 +50,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let video_path = matches.get_one::<String>("video").unwrap();
     let output_dir = matches.get_one::<PathBuf>("output-dir").unwrap();
 
-    let tmp = TempDir::new()?;
+    if !output_dir.exists() {
+        create_dir(output_dir).unwrap();
+    }
+
+    let tmp = TempDir::new_in(output_dir)?;
     let tmp_path = tmp.path();
 
     println!(">=== Running FFMPEG ===<");
@@ -64,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             video_path,
             "-r",
             "1",
-            &format!("{}/%03d.png", tmp.path().to_str().unwrap()),
+            &format!("{}/%03d.png", tmp_path.to_str().unwrap()),
         ],
         &ffmpeg_flags,
     )?;
@@ -103,14 +107,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     eprintln!("You should try rerunning this program.");
                     eprintln!("In any case, here's the error message: \n\n{error:?}");
 
-                    remove_dir_all(tmp_path).unwrap(); // Prevents littering /tmp when image processing fails
+                    remove_dir_all(tmp_path).unwrap(); // Prevents littering temporary directory when image processing fails
                     exit(1);
                 }
             };
-
-            if !output_dir.exists() {
-                create_dir(output_dir).unwrap();
-            }
 
             let mut output = File::create(format!(
                 "{}/{}.txt",
