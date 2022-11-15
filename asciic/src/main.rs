@@ -103,8 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut now = 0;
         let mut average = 0;
         let mut time = Instant::now();
-        let mut etas = vec![];
-        let mut eta = 0;
+        let mut eta = Duration::from_secs(0);
 
         loop {
             while let Ok(_) = rx.try_recv() {
@@ -112,21 +111,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                 average += 1;
 
                 print!(
-                    "\rProcessing: {}% {}/{} (ETA: {eta}s)",
+                    "\rProcessing: {}% {}/{} (ETA: {eta:?})",
                     (100 * now) / total,
                     now,
                     total
                 );
             }
 
-            if time.elapsed() >= Duration::from_secs(1) {
-                etas.push(total.checked_div(average).unwrap_or_default());
+            if time.elapsed() >= Duration::from_millis(512) {
+                eta = Duration::from_secs(
+                    ((total - now).checked_sub(average).unwrap_or_default() / 30) as _,
+                );
+
                 average = 0;
                 time = Instant::now();
-            }
-
-            if etas.len() > 5 {
-                eta = etas.iter().sum::<usize>() / etas.len();
             }
         }
     });
