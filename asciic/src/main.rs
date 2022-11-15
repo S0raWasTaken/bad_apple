@@ -10,7 +10,7 @@ use std::{
 
 use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tempdir::TempDir;
+use tempfile::TempDir;
 use util::{cli, ffmpeg, max_sub, OutputSize};
 
 mod util;
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         create_dir(output_dir).unwrap();
     }
 
-    let tmp = TempDir::new_in(output_dir, "frame_cache")?;
+    let tmp = TempDir::new_in(output_dir)?;
     let tmp_path = tmp.path();
 
     println!(">=== Running FFMPEG ===<");
