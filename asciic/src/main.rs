@@ -1,13 +1,15 @@
 #![warn(clippy::pedantic)]
 use std::{
     error::Error,
-    fs::{create_dir, read_dir, remove_dir_all, File},
+    fs::{self, create_dir, read_dir, remove_dir_all, File},
     io::Write,
     path::PathBuf,
     process::exit,
     str::FromStr,
-    sync::{mpsc, Arc, Mutex},
-    thread,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, RwLock,
+    },
     time::{Duration, Instant},
 };
 
@@ -96,47 +98,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!();
     println!("Starting frame generation ...");
 
-    let (tx, rx) = mpsc::channel();
+    let processed = AtomicUsize::new(0);
+    let average = AtomicUsize::new(0);
+    let time = Arc::new(RwLock::new(Instant::now()));
+    let eta = Arc::new(RwLock::new(Duration::from_secs(0)));
+
     let total = frames.len();
-
-    thread::spawn(move || {
-        let mut now = 0;
-        let mut average = 0;
-        let mut time = Instant::now();
-        let mut eta = Duration::from_secs(0);
-
-        loop {
-            while rx.try_recv().is_ok() {
-                now += 1;
-                average += 1;
-
-                print!(
-                    "\rProcessing: {}% {}/{} (ETA: {eta:?})",
-                    (100 * now) / total,
-                    now,
-                    total
-                );
-            }
-
-            if time.elapsed() >= Duration::from_millis(512) {
-                eta = Duration::from_secs(
-                    ((total - now).checked_sub(average).unwrap_or_default() / 30) as _,
-                );
-
-                average = 0;
-                time = Instant::now();
-            }
-        }
-    });
-
-    let tx = Arc::new(Mutex::new(tx));
 
     frames
         // If you don't want this parallelized,
         .into_par_iter() // . . . . . Remove this two lines.
-        .for_each(|image| {
-            let processed = match process_image(
-                &image,
+        .for_each(|path| {
+            let image = match process_image(
+                &path,
                 *redimension,
                 colorize,
                 skip_compression,
@@ -157,18 +131,29 @@ fn main() -> Result<(), Box<dyn Error>> {
             let out = format!(
                 "{}/{}.txt",
                 output_dir.to_str().unwrap(),
-                image.file_stem().unwrap().to_str().unwrap()
+                path.file_stem().unwrap().to_str().unwrap()
             );
 
-            let mut output = File::create(out).unwrap();
+            fs::write(&out, image.as_bytes()).unwrap();
 
-            tx.clone()
-                .lock()
-                .unwrap()
-                .send(())
-                .expect("Failed to send out");
+            processed.fetch_add(1, Ordering::Relaxed);
+            average.fetch_add(1, Ordering::Relaxed);
+            let now = processed.load(Ordering::Relaxed);
 
-            output.write_all(processed.as_bytes()).unwrap();
+            print!(
+                "\rProcessing: {}% {now}/{total} (ETA: {:?})",
+                (100 * now) / total,
+                eta.read().unwrap()
+            );
+
+            if time.read().unwrap().elapsed() >= Duration::from_millis(512) {
+                *eta.write().unwrap() = Duration::from_secs(
+                    ((total - now).saturating_sub(average.load(Ordering::Relaxed)) / 30) as _,
+                );
+
+                average.store(0, Ordering::Relaxed);
+                *time.write().unwrap() = Instant::now();
+            }
         });
 
     println!(
