@@ -147,5 +147,9 @@ pub fn cli() -> Clap<'static> {
                 .value_parser(value_parser!(String))
                 .help("Pass extra flags to ffmpeg")
                 .last(true),
+            Arg::new("no-audio")
+                .long("no-audio")
+                .help("skips audio generation")
+                .conflicts_with("image"),
         ])
 }

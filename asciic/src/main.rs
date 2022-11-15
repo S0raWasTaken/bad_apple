@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let colorize = matches.contains_id("colorize");
     let skip_compression = matches.contains_id("no-compression");
     let paint_fg = matches.contains_id("paint-fg");
+    let skip_audio = matches.contains_id("no-audio");
     let compression_threshold = matches.get_one::<u8>("compression-threshold").unwrap();
     let ffmpeg_flags = matches
         .get_many::<String>("ffmpeg-flags")
@@ -69,14 +70,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     // Extract audio
-    ffmpeg(
-        &[
-            "-i",
-            video_path,
-            &format!("{}/audio.mp3", output_dir.to_str().unwrap()),
-        ],
-        &ffmpeg_flags,
-    )?;
+    if !skip_audio {
+        ffmpeg(
+            &[
+                "-i",
+                video_path,
+                &format!("{}/audio.mp3", output_dir.to_str().unwrap()),
+            ],
+            &ffmpeg_flags,
+        )?;
+    }
 
     let frames = read_dir(tmp_path)?;
 
