@@ -8,6 +8,15 @@ use clap::{
     value_parser, Arg, Command as Clap, ErrorKind,
 };
 
+#[derive(Clone, Copy)]
+pub struct Options {
+    pub compression_threshold: u8,
+    pub redimension: OutputSize,
+    pub skip_compression: bool,
+    pub paint_fg: bool,
+    pub colorize: bool,
+}
+
 pub fn ffmpeg(args: &[&str], extra_flags: &[&String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut command = Command::new("ffmpeg");
     command

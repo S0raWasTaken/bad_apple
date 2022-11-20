@@ -3,7 +3,7 @@ use std::{
     error::Error,
     fs::{self, create_dir, read_dir, remove_dir_all, File},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::exit,
     str::FromStr,
     sync::{
@@ -16,18 +16,22 @@ use std::{
 use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tempfile::TempDir;
-use util::{cli, ffmpeg, max_sub, OutputSize};
+use util::{cli, ffmpeg, max_sub, Options, OutputSize};
 
 mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = cli().get_matches();
-    let redimension = matches.get_one::<OutputSize>("frame-size").unwrap();
-    let colorize = matches.contains_id("colorize");
-    let skip_compression = matches.contains_id("no-compression");
-    let paint_fg = matches.contains_id("paint-fg");
+
+    let options = Options {
+        redimension: *matches.get_one::<OutputSize>("frame-size").unwrap(),
+        colorize: matches.contains_id("colorize"),
+        skip_compression: matches.contains_id("no-compression"),
+        paint_fg: matches.contains_id("paint-fg"),
+        compression_threshold: *matches.get_one::<u8>("compression-threshold").unwrap(),
+    };
+
     let skip_audio = matches.contains_id("no-audio");
-    let compression_threshold = matches.get_one::<u8>("compression-threshold").unwrap();
     let ffmpeg_flags = matches
         .get_many::<String>("ffmpeg-flags")
         .unwrap_or_default()
@@ -35,14 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(image) = matches.get_one::<String>("image") {
         let image_path = PathBuf::from_str(image)?;
-        let processed_img = process_image(
-            &image_path,
-            *redimension,
-            colorize,
-            skip_compression,
-            paint_fg,
-            *compression_threshold,
-        )?;
+        let processed_img = process_image(&image_path, options)?;
 
         File::create(format!(
             "{}.txt",
@@ -95,9 +92,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|entry| entry.path())
         .collect::<Vec<PathBuf>>();
 
-    println!();
-    println!("Starting frame generation ...");
+    println!("\nStarting frame generation ...");
 
+    read_frames(frames, tmp_path, output_dir, options);
+
+    println!(
+        "\n\
+        >=== Done! ===<\n\
+        >> Output available at {output_dir:?}"
+    );
+
+    Ok(())
+}
+
+fn read_frames(frames: Vec<PathBuf>, tmp_path: &Path, output_dir: &Path, options: Options) {
     let processed = AtomicUsize::new(0);
     let average = AtomicUsize::new(0);
     let time = Arc::new(RwLock::new(Instant::now()));
@@ -109,14 +117,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // If you don't want this parallelized,
         .into_par_iter() // . . . . . Remove this two lines.
         .for_each(|path| {
-            let image = match process_image(
-                &path,
-                *redimension,
-                colorize,
-                skip_compression,
-                paint_fg,
-                *compression_threshold,
-            ) {
+            let image = match process_image(&path, options) {
                 Ok(p) => p,
                 Err(error) => {
                     eprintln!("Image processing failed. This is probably an ffmpeg related issue");
@@ -134,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 path.file_stem().unwrap().to_str().unwrap()
             );
 
-            fs::write(&out, image.as_bytes()).unwrap();
+            fs::write(out, image.as_bytes()).unwrap();
 
             processed.fetch_add(1, Ordering::Relaxed);
             average.fetch_add(1, Ordering::Relaxed);
@@ -155,27 +156,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 *time.write().unwrap() = Instant::now();
             }
         });
-
-    println!(
-        "\n\
-        >=== Done! ===<\n\
-        >> Output available at {output_dir:?}"
-    );
-
-    Ok(())
 }
 
-fn process_image(
-    image: &PathBuf,
-    redimension: OutputSize,
-    colorize: bool,
-    skip_compression: bool,
-    paint_fg: bool,
-    threshold: u8,
-) -> Result<String, ImageError> {
+fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError> {
     let image = Reader::open(image)?.decode()?;
 
-    let resized_image = image.resize_exact(redimension.0, redimension.1, FilterType::Nearest);
+    let resized_image = image.resize_exact(
+        options.redimension.0,
+        options.redimension.1,
+        FilterType::Nearest,
+    );
 
     let size = resized_image.dimensions();
 
@@ -189,16 +179,16 @@ fn process_image(
             let [r, g, b, _] = resized_image.get_pixel(x, y).0;
 
             let mut colorize = |input: char| {
-                if (colorize
-                    && (max_sub(last_pixel_rgb[0], r) > threshold
-                        || max_sub(last_pixel_rgb[1], g) > threshold
-                        || max_sub(last_pixel_rgb[2], b) > threshold
-                        || is_first_row_pixel))
-                    || skip_compression
+                if options.colorize
+                    && (max_sub(last_pixel_rgb[0], r) > options.compression_threshold
+                        || max_sub(last_pixel_rgb[1], g) > options.compression_threshold
+                        || max_sub(last_pixel_rgb[2], b) > options.compression_threshold
+                        || is_first_row_pixel)
+                    || options.skip_compression
                 {
                     res.push_str(&format!(
                         "\x1b[{}8;2;{r};{g};{b}m{input}",
-                        if paint_fg { 3 } else { 4 }
+                        if options.paint_fg { 3 } else { 4 }
                     ));
                 } else {
                     res.push(input);
@@ -219,7 +209,7 @@ fn process_image(
             last_pixel_rgb.0 = [r, g, b, 255];
             is_first_row_pixel = false;
         }
-        if colorize {
+        if options.colorize {
             res.push_str("\x1b[0m\n");
         } else {
             res.push('\n');
