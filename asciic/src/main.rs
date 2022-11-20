@@ -1,11 +1,16 @@
 #![warn(clippy::pedantic)]
 use std::{
     error::Error,
-    fs::{create_dir, read_dir, remove_dir_all, File},
+    fs::{self, create_dir, read_dir, remove_dir_all, File},
     io::Write,
     path::PathBuf,
     process::exit,
     str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, RwLock,
+    },
+    time::{Duration, Instant},
 };
 
 use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
@@ -85,16 +90,27 @@ fn main() -> Result<(), Box<dyn Error>> {
         )?;
     }
 
-    let frames = read_dir(tmp_path)?;
-
-    frames
+    let frames = read_dir(tmp_path)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .collect::<Vec<PathBuf>>() // If you don't want this parallelized,
+        .collect::<Vec<PathBuf>>();
+
+    println!();
+    println!("Starting frame generation ...");
+
+    let processed = AtomicUsize::new(0);
+    let average = AtomicUsize::new(0);
+    let time = Arc::new(RwLock::new(Instant::now()));
+    let eta = Arc::new(RwLock::new(Duration::from_secs(0)));
+
+    let total = frames.len();
+
+    frames
+        // If you don't want this parallelized,
         .into_par_iter() // . . . . . Remove this two lines.
-        .for_each(|image| {
-            let processed = match process_image(
-                &image,
+        .for_each(|path| {
+            let image = match process_image(
+                &path,
                 *redimension,
                 colorize,
                 skip_compression,
@@ -112,14 +128,32 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             };
 
-            let mut output = File::create(format!(
+            let out = format!(
                 "{}/{}.txt",
                 output_dir.to_str().unwrap(),
-                image.file_stem().unwrap().to_str().unwrap()
-            ))
-            .unwrap();
+                path.file_stem().unwrap().to_str().unwrap()
+            );
 
-            output.write_all(processed.as_bytes()).unwrap();
+            fs::write(&out, image.as_bytes()).unwrap();
+
+            processed.fetch_add(1, Ordering::Relaxed);
+            average.fetch_add(1, Ordering::Relaxed);
+            let now = processed.load(Ordering::Relaxed);
+
+            print!(
+                "\rProcessing: {}% {now}/{total} (ETA: {:?})",
+                (100 * now) / total,
+                eta.read().unwrap()
+            );
+
+            if time.read().unwrap().elapsed() >= Duration::from_millis(512) {
+                *eta.write().unwrap() = Duration::from_secs(
+                    ((total - now).saturating_sub(average.load(Ordering::Relaxed)) / 30) as _,
+                );
+
+                average.store(0, Ordering::Relaxed);
+                *time.write().unwrap() = Instant::now();
+            }
         });
 
     println!(
