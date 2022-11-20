@@ -11,7 +11,10 @@ pub fn link_frames(items: TokenStream) -> TokenStream {
     let dir = read_dir(frames_dir.to_string().replace('"', "")).unwrap();
     let mut ret = String::from("&[");
 
-    let mut entries = dir.filter_map(Result::ok).collect::<Vec<_>>();
+    let mut entries = dir
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name() != *"audio.mp3")
+        .collect::<Vec<_>>();
 
     entries.sort_by_key(|k| {
         k.path()
@@ -24,7 +27,6 @@ pub fn link_frames(items: TokenStream) -> TokenStream {
     });
 
     for entry in entries {
-        dbg!(&entry);
         ret.push_str(&format!("\"{}\",", read_to_string(entry.path()).unwrap()));
     }
 
