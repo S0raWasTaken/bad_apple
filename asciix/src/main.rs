@@ -1,6 +1,7 @@
 use std::{
     ffi::OsString,
     fs::{read_dir, read_to_string},
+    io::{stdout, Write},
     path::PathBuf,
     process::Command as Shell,
     thread::spawn,
@@ -8,7 +9,6 @@ use std::{
 };
 
 use clap::{value_parser, Arg, Command};
-use console::Term;
 
 fn main() {
     let matches = cli().get_matches();
@@ -25,11 +25,14 @@ fn play(frames: Vec<String>, rate: u32, frames_dir: PathBuf) {
 
     spawn(move || audio(&frames_dir));
 
+    let mut stdout = stdout().lock();
+
     for frame in frames {
         let time = Instant::now();
-        Term::stdout().clear_screen().unwrap();
-        println!("{frame}");
-        std::thread::sleep(delay - time.elapsed());
+        stdout.write_all(b"\r\x1b[2J\r\x1b[H").unwrap();
+        stdout.write_all(frame.as_bytes()).unwrap();
+
+        std::thread::sleep(delay.saturating_sub(time.elapsed()));
     }
 }
 

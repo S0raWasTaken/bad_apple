@@ -5,4 +5,3 @@ edition = "2021"
 
 [dependencies]
 clap = "3.2.22"
-console = "0.15.2"
