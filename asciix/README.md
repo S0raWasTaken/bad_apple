@@ -12,20 +12,26 @@ cargo install --git https://github.com/S0raWasTaken/bad_apple asciix
 > --help output:
 ```yml
 USAGE:
-    asciix <path> [framerate]
+    asciix [OPTIONS] <file> [framerate]
 
 ARGS:
-    <path>         path to the frames directory
+    <file>         path to the .bapple file
     <framerate>    framerate to play the ascii. Default: 30 [default: 30]
 
 OPTIONS:
     -h, --help       Print help information
+        --loop       loops the stream
     -V, --version    Print version information
 ```
 
-Example:
+Examples:
 ```sh
-asciix bad_apple.mp4 30 # frames per second
+asciix video.bapple 30 # frames per second
+```
+
+Loop a video/gif
+```sh
+asciix video.bapple --loop
 ```
 
 ## Copying
