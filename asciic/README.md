@@ -14,12 +14,12 @@ cargo install --git https://github.com/S0raWasTaken/bad_apple asciic
 > --help output:
 ```yml
 USAGE:
-    asciic [OPTIONS] [ARGS]
+    asciic [OPTIONS] [video] [output] [-- <ffmpeg-flags>...]
 
 ARGS:
-    <video>         Input video to transform in asciinema
-    <output-dir>    Output directory
-                    Creates a directory if it doesn't exist
+    <video>              Input video to transform in asciinema
+    <output>             Output file name [default: output]
+    <ffmpeg-flags>...    Pass extra flags to ffmpeg
 
 OPTIONS:
     -c
@@ -29,10 +29,16 @@ OPTIONS:
             Print help information
 
     -i, --image <image>
-            compiles a single image
+            Compiles a single image
 
     -n, --skip-compression
-            disables compression on colored outputs
+            Disables compression on colored outputs
+
+        --no-audio
+            skips audio generation
+
+        --paint-fg
+            Paints the foreground instead of background
 
     -s, --size <frame-size>
             The ratio that each frame should be resized [default: 216x56]
@@ -42,22 +48,24 @@ OPTIONS:
 
     -V, --version
             Print version information
+
 ```
 
 Examples:
 > Compiling a normal video:
 ```sh
-asciic video.mp4 output-dir/
+asciic video.mp4 output.bapple
 ```
 
 > Compiling a colored video:
 ```sh
-asciic -c video.mp4 output-dir/
+asciic -c video.mp4 output.bapple
 ```
 
 > Compiling an image:
 ```sh
 asciic -i image.png
+# Output will be available in image.txt
 ```
 
 > Compiling a colored image:
@@ -68,7 +76,7 @@ asciic -i image.png -c --skip-compression
 
 > Passing the frame size argument:
 ```sh
-asciic video.mp4 output-dir/ -i 500x150
+asciic video.mp4 output.bapple -s 500x150
 # This command gives out a warning about things getting wonky at high image sizes,
 # but you can safely ignore them if you want :)
 ```
