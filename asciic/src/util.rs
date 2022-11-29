@@ -1,12 +1,17 @@
 use std::{
-    path::PathBuf,
-    process::{Command, Stdio},
+    fs::{remove_dir_all, File},
+    io,
+    path::{Path, PathBuf},
+    process::{abort, Command, Stdio},
+    thread::sleep,
+    time::Duration,
 };
 
 use clap::{
     builder::{TypedValueParser, ValueParserFactory},
     value_parser, Arg, Command as Clap, ErrorKind,
 };
+use tar::{Builder, Header};
 
 #[derive(Clone, Copy)]
 pub struct Options {
@@ -15,6 +20,38 @@ pub struct Options {
     pub skip_compression: bool,
     pub paint_fg: bool,
     pub colorize: bool,
+    pub skip_audio: bool,
+}
+
+pub fn clean_abort(tmp_path: &Path) -> ! {
+    sleep(Duration::from_secs(2));
+    clean(tmp_path);
+    eprintln!("\nAborting!");
+    abort();
+}
+
+pub fn clean(tmp_path: &Path) {
+    eprintln!("\n\nCleaning up...");
+    remove_dir_all(tmp_path).unwrap();
+}
+
+#[inline]
+pub fn pause() -> ! {
+    loop {
+        sleep(Duration::from_millis(5));
+    }
+}
+
+pub fn add_file(
+    tar_archive: &mut Builder<File>,
+    path: impl AsRef<Path>,
+    data: &Vec<u8>,
+) -> io::Result<()> {
+    let mut header = Header::new_gnu();
+    header.set_size(data.len() as u64);
+    header.set_cksum();
+
+    tar_archive.append_data(&mut header, path, data.as_slice())
 }
 
 pub fn ffmpeg(args: &[&str], extra_flags: &[&String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -109,11 +146,11 @@ pub fn cli() -> Clap<'static> {
                 .index(1)
                 .help("Input video to transform in asciinema")
                 .takes_value(true),
-            Arg::new("output-dir")
+            Arg::new("output")
                 .value_parser(value_parser!(PathBuf))
-                .required_unless_present("image")
+                .default_value("output")
                 .conflicts_with("image")
-                .help("Output directory\nCreates a directory if it doesn't exist")
+                .help("Output file name")
                 .index(2),
             Arg::new("frame-size")
                 .short('s')
