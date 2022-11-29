@@ -23,12 +23,16 @@ pub struct Options {
     pub skip_audio: bool,
 }
 
-pub fn cleanup(tmp_path: &Path) -> ! {
+pub fn clean_abort(tmp_path: &Path) -> ! {
     sleep(Duration::from_secs(2));
-    eprintln!("\n\nCleaning up...");
-    remove_dir_all(tmp_path).unwrap();
+    clean(tmp_path);
     eprintln!("\nAborting!");
     abort();
+}
+
+pub fn clean(tmp_path: &Path) {
+    eprintln!("\n\nCleaning up...");
+    remove_dir_all(tmp_path).unwrap();
 }
 
 #[inline]

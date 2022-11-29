@@ -20,7 +20,7 @@ use tempfile::TempDir;
 use util::{add_file, cli, ffmpeg, max_sub, Options, OutputSize};
 use zstd::encode_all;
 
-use crate::util::{cleanup, pause};
+use crate::util::{clean, clean_abort, pause};
 
 mod util;
 
@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let video_path = matches.get_one::<String>("video").unwrap();
     let mut output = matches.get_one::<PathBuf>("output").unwrap().clone();
 
-    let tmp = Arc::new(TempDir::new_in(".cache")?);
+    let tmp = Arc::new(TempDir::new_in(".")?);
     let tmp_path = tmp.path();
 
     let tmp_handler = Arc::clone(&tmp);
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stop_handle = Arc::clone(&should_stop);
     ctrlc::set_handler(move || {
         stop_handle.store(true, Ordering::Relaxed);
-        cleanup(tmp_handler.path());
+        clean_abort(tmp_handler.path());
     })?;
 
     println!(">=== Running FFMPEG ===<");
@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &ffmpeg_flags,
     )
     .unwrap_or_else(|_| {
-        cleanup(tmp_path);
+        clean_abort(tmp_path);
     });
 
     // Extract audio
@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             &ffmpeg_flags,
         )
         .unwrap_or_else(|_| {
-            cleanup(tmp_path);
+            clean_abort(tmp_path);
         });
     }
 
@@ -118,6 +118,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         output.display()
     );
 
+    clean(tmp_path);
     Ok(())
 }
 
@@ -147,7 +148,7 @@ fn read_frames(
                     eprintln!("You should try rerunning this program.");
                     eprintln!("In any case, here's the error message: \n\n{error:?}");
 
-                    cleanup(tmp_path); // Prevents littering temporary directory when image processing fails
+                    clean_abort(tmp_path); // Prevents littering temporary directory when image processing fails
                 }
             };
 
