@@ -1,5 +1,4 @@
 #![warn(clippy::pedantic)]
-#![allow(clippy::struct_excessive_bools)] // Allowing since struct Options is not a state machine.
 
 use std::{
     error::Error,
@@ -17,11 +16,17 @@ use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tar::Builder;
 use tempfile::TempDir;
-use util::{add_file, cli, ffmpeg, max_sub, Options, OutputSize};
 use zstd::encode_all;
 
-use crate::util::{clean, clean_abort, pause};
+use cli::cli;
+use primitives::{
+    Options, OutputSize,
+    PaintStyle::{self, BgOnly, BgPaint, FgPaint},
+};
+use util::{add_file, clean, clean_abort, ffmpeg, max_sub, pause};
 
+mod cli;
+mod primitives;
 mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -31,7 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         redimension: *matches.get_one::<OutputSize>("frame-size").unwrap(),
         colorize: matches.contains_id("colorize"),
         skip_compression: matches.contains_id("no-compression"),
-        paint_fg: matches.contains_id("paint-fg"),
+        style: *matches.get_one::<PaintStyle>("style").unwrap(),
         compression_threshold: *matches.get_one::<u8>("compression-threshold").unwrap(),
         skip_audio: matches.contains_id("no-audio"),
     };
@@ -222,11 +227,20 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
                     {
                         res.push_str(&format!(
                             "\x1b[{}8;2;{r};{g};{b}m{}",
-                            if options.paint_fg { 3 } else { 4 },
-                            $input
+                            match options.style {
+                                BgPaint | BgOnly => 4,
+                                FgPaint => 3,
+                            },
+                            match options.style {
+                                BgPaint | FgPaint => $input,
+                                BgOnly => ' ',
+                            }
                         ));
                     } else {
-                        res.push($input);
+                        res.push(match options.style {
+                            BgPaint | FgPaint => $input,
+                            BgOnly => ' ',
+                        });
                     }
                 };
             }
