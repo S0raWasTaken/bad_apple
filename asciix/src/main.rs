@@ -24,7 +24,7 @@ fn main() -> BoxResult<()> {
     let matches = cli().get_matches();
 
     let frames_file = matches.get_one::<PathBuf>("file").unwrap();
-    let framerate = *matches.get_one::<u32>("framerate").unwrap();
+    let framerate = *matches.get_one::<u64>("framerate").unwrap();
     let loop_stream = matches.contains_id("loop");
 
     loop {
@@ -37,7 +37,7 @@ fn main() -> BoxResult<()> {
     Ok(())
 }
 
-fn play(tar_file: PathBuf, rate: u32) -> io::Result<()> {
+fn play(tar_file: PathBuf, rate: u64) -> io::Result<()> {
     let (signal_sender, signal_recv) = BiChannel::<bool, Vec<u8>>::new();
 
     spawn(move || manage_buffer(&signal_recv, File::open(tar_file)?, Vec::new()));
@@ -46,20 +46,44 @@ fn play(tar_file: PathBuf, rate: u32) -> io::Result<()> {
         spawn(|| audio(audio_file));
     }
 
-    let delay = Duration::from_secs(1) / rate;
+    let delay = 1000 / rate;
     let mut lock = stdout().lock();
+    let mut ms_behind = 0;
     loop {
         let time = Instant::now();
         if let Some(frame) = next_frame(&signal_sender) {
+            if ms_behind >= delay {
+                ms_behind -= delay;
+                continue;
+            }
             lock.write_all(b"\r\x1b[2J\r\x1b[H")?;
             lock.write_all(&frame)?;
-            sleep(delay.saturating_sub(time.elapsed()));
+
+            #[allow(clippy::cast_possible_truncation)]
+            let delay_sub = remaining_sub(delay, time.elapsed().as_millis() as u64);
+            ms_behind += delay_sub.1;
+
+            sleep(Duration::from_millis(delay_sub.0));
         } else {
             break;
         }
     }
 
     Ok(())
+}
+
+#[inline]
+fn remaining_sub(a: u64, b: u64) -> (u64, u64) {
+    if a >= b {
+        (a - b, 0)
+    } else {
+        (0, max_sub(a, b))
+    }
+}
+
+#[inline]
+fn max_sub(a: u64, b: u64) -> u64 {
+    a.max(b) - a.min(b)
 }
 
 fn audio(mp3_buf: Vec<u8>) {
@@ -94,7 +118,7 @@ fn cli() -> Command<'static> {
                 .default_value("30")
                 .takes_value(true)
                 .help("framerate to play the ascii. Default: 30")
-                .value_parser(value_parser!(u32)),
+                .value_parser(value_parser!(u64)),
             Arg::new("loop").long("loop").help("loops the stream"),
         ])
 }
