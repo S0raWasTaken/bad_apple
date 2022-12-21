@@ -237,10 +237,14 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
                             }
                         ));
                     } else {
-                        res.push(match options.style {
-                            BgPaint | FgPaint => $input,
-                            BgOnly => ' ',
-                        });
+                        res.push(if options.colorize {
+                            match options.style {
+                                BgPaint | FgPaint => $input,
+                                BgOnly => ' ',
+                            }
+                        } else {
+                            $input
+                        })
                     }
                 };
             }
