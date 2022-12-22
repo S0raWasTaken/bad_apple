@@ -70,10 +70,13 @@ fn args() -> [Arg<'static>; 10] {
             .help("Skips audio generation")
             .conflicts_with("image"),
         Arg::new("style")
+            .requires("colorize")
             .takes_value(true)
             .long("style")
-            .help("Sets a style to follow when generating frames")
-            .default_value("bg-only")
+            .help("Sets a style to follow when generating frames [default: bg-only]")
+            .default_value_if("colorize", None, Some("bg-only"))
+            .default_value("bg-paint")
+            .hide_default_value(true)
             .value_parser(value_parser!(PaintStyle)),
     ]
 }
