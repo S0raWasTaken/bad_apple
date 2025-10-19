@@ -219,49 +219,52 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
 
             let mut was_colorized = false;
 
-            macro_rules! colorize {
-                ($input:expr) => {
-                    if options.colorize
-                        && (max_sub(last_colorized_pixel[0], r) > options.compression_threshold
-                            || max_sub(last_colorized_pixel[1], g) > options.compression_threshold
-                            || max_sub(last_colorized_pixel[2], b) > options.compression_threshold
-                            || is_first_row_pixel)
-                        || options.skip_compression
-                    {
-                        was_colorized = true;
-                        write!(
-                            res,
-                            "\x1b[{}8;2;{r};{g};{b}m{}",
-                            match options.style {
-                                BgPaint | BgOnly => 4,
-                                FgPaint => 3,
-                            },
-                            match options.style {
-                                BgPaint | FgPaint => $input,
-                                BgOnly => ' ',
-                            }
-                        )
-                        .unwrap();
-                    } else {
-                        res.push(match options.style {
-                            BgPaint | FgPaint => $input,
-                            BgOnly => ' ',
-                        });
-                    }
-                };
-            }
-
             let brightness = r.max(g).max(b);
 
-            match brightness {
-                0..=20 => colorize!(' '),
-                21..=40 => colorize!('.'),
-                41..=80 => colorize!(':'),
-                81..=100 => colorize!('-'),
-                101..=130 => colorize!('='),
-                131..=200 => colorize!('+'),
-                201..=250 => colorize!('#'),
-                _ => colorize!('@'),
+            let (thresholds, chars) = if let FgPaint = options.style {
+                (
+                    [20, 40, 80, 100, 130, 200, 250],
+                    [' ', '.', ':', '-', '=', '+', '#'],
+                )
+            } else {
+                (
+                    [5, 10, 15, 20, 25, 40, 200],
+                    [' ', '.', ':', '-', '=', '+', '#'],
+                )
+            };
+
+            let char = chars
+                .iter()
+                .zip(thresholds)
+                .find(|(_, th)| brightness <= *th)
+                .map_or('@', |(&c, _)| c);
+
+            if options.colorize
+                && (max_sub(last_colorized_pixel[0], r) > options.compression_threshold
+                    || max_sub(last_colorized_pixel[1], g) > options.compression_threshold
+                    || max_sub(last_colorized_pixel[2], b) > options.compression_threshold
+                    || is_first_row_pixel)
+                || options.skip_compression
+            {
+                was_colorized = true;
+                write!(
+                    res,
+                    "\x1b[{}8;2;{r};{g};{b}m{}",
+                    match options.style {
+                        BgPaint | BgOnly => 4,
+                        FgPaint => 3,
+                    },
+                    match options.style {
+                        BgPaint | FgPaint => char,
+                        BgOnly => ' ',
+                    }
+                )
+                .unwrap();
+            } else {
+                res.push(match options.style {
+                    BgPaint | FgPaint => char,
+                    BgOnly => ' ',
+                });
             }
 
             if was_colorized {
