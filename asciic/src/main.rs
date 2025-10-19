@@ -2,6 +2,7 @@
 
 use std::{
     error::Error,
+    fmt::Write as FmtWrite,
     fs::{read_dir, File},
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -209,23 +210,27 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
     let size = resized_image.dimensions();
 
     let mut res = String::new();
-    let mut last_pixel_rgb = resized_image.get_pixel(size.0 - 1, size.1 - 1);
+    let mut last_colorized_pixel = resized_image.get_pixel(size.0 - 1, size.1 - 1);
     let mut is_first_row_pixel = true;
 
     for y in 0..size.1 {
         for x in 0..size.0 {
             let [r, g, b, _] = resized_image.get_pixel(x, y).0;
 
+            let mut was_colorized = false;
+
             macro_rules! colorize {
                 ($input:expr) => {
                     if options.colorize
-                        && (max_sub(last_pixel_rgb[0], r) > options.compression_threshold
-                            || max_sub(last_pixel_rgb[1], g) > options.compression_threshold
-                            || max_sub(last_pixel_rgb[2], b) > options.compression_threshold
+                        && (max_sub(last_colorized_pixel[0], r) > options.compression_threshold
+                            || max_sub(last_colorized_pixel[1], g) > options.compression_threshold
+                            || max_sub(last_colorized_pixel[2], b) > options.compression_threshold
                             || is_first_row_pixel)
                         || options.skip_compression
                     {
-                        res.push_str(&format!(
+                        was_colorized = true;
+                        write!(
+                            res,
                             "\x1b[{}8;2;{r};{g};{b}m{}",
                             match options.style {
                                 BgPaint | BgOnly => 4,
@@ -235,7 +240,8 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
                                 BgPaint | FgPaint => $input,
                                 BgOnly => ' ',
                             }
-                        ));
+                        )
+                        .unwrap();
                     } else {
                         res.push(match options.style {
                             BgPaint | FgPaint => $input,
@@ -245,7 +251,9 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
                 };
             }
 
-            match r {
+            let brightness = r.max(g).max(b);
+
+            match brightness {
                 0..=20 => colorize!(' '),
                 21..=40 => colorize!('.'),
                 41..=80 => colorize!(':'),
@@ -256,7 +264,9 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
                 _ => colorize!('@'),
             }
 
-            last_pixel_rgb.0 = [r, g, b, 255];
+            if was_colorized {
+                last_colorized_pixel.0 = [r, g, b, 255];
+            }
             is_first_row_pixel = false;
         }
         if options.colorize {
