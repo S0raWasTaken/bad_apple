@@ -33,7 +33,7 @@ mod util;
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = cli().get_matches();
 
-    let options = Options {
+    let mut options = Options {
         redimension: *matches.get_one::<OutputSize>("frame-size").unwrap(),
         colorize: matches.contains_id("colorize"),
         skip_compression: matches.contains_id("no-compression"),
@@ -41,6 +41,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         compression_threshold: *matches.get_one::<u8>("compression-threshold").unwrap(),
         skip_audio: matches.contains_id("no-audio"),
     };
+
+    if options.redimension == OutputSize(0, 0) {
+        let Some((width, height)) = term_size::dimensions() else {
+            return Err("Could not detect terminal window size.".into());
+        };
+
+        options.redimension = OutputSize(width, height);
+    }
+
     let ffmpeg_flags = matches
         .get_many::<String>("ffmpeg-flags")
         .unwrap_or_default()
@@ -202,8 +211,12 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
     let image = Reader::open(image)?.decode()?;
 
     let resized_image = image.resize_exact(
-        options.redimension.0,
-        options.redimension.1,
+        u32::try_from(options.redimension.0).expect(
+            "... Why are you trying to make the width larger than the 32bit integer limit?????",
+        ),
+        u32::try_from(options.redimension.1).expect(
+            "... Why are you trying to make the height larger than the 32bit integer limit?????",
+        ),
         FilterType::Nearest,
     );
 

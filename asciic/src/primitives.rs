@@ -20,8 +20,8 @@ pub enum PaintStyle {
     BgOnly,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct OutputSize(pub u32, pub u32);
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OutputSize(pub usize, pub usize);
 impl ValueParserFactory for OutputSize {
     type Parser = OutputSizeParser;
 
@@ -58,11 +58,11 @@ impl TypedValueParser for OutputSizeParser {
         let output_size = OutputSize(
             vals.first()
                 .unwrap()
-                .parse::<u32>()
+                .parse::<usize>()
                 .map_err(|e| cmd.clone().error(ErrorKind::InvalidValue, e.to_string()))?,
             vals.last()
                 .unwrap()
-                .parse::<u32>()
+                .parse::<usize>()
                 .map_err(|e| cmd.clone().error(ErrorKind::InvalidValue, e.to_string()))?,
         );
 

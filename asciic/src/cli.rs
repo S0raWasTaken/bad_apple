@@ -30,7 +30,7 @@ fn args() -> [Arg<'static>; 10] {
             .index(2),
         Arg::new("frame-size")
             .short('s')
-            .default_value("216x56")
+            .default_value("0x0")
             .long("size")
             .takes_value(true)
             .required(false)
