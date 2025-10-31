@@ -3,20 +3,22 @@
 use std::{
     error::Error,
     fmt::Write as FmtWrite,
-    fs::{read_dir, File},
+    fs::{File, read_dir},
     io::{Read, Write},
     path::{Path, PathBuf},
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
-use image::{imageops::FilterType, io::Reader, GenericImageView, ImageError};
+use image::{GenericImageView, ImageError, imageops::FilterType, io::Reader};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use ron::ser::PrettyConfig;
 use tar::Builder;
 use tempfile::TempDir;
+use tokio::runtime::Runtime;
 use zstd::encode_all;
 
 use cli::cli;
@@ -26,20 +28,30 @@ use primitives::{
 };
 use util::{add_file, clean, clean_abort, ffmpeg, max_sub, pause};
 
+use crate::{
+    installer::{setup_ffmpeg, setup_ytdlp},
+    primitives::Metadata,
+    util::{probe_fps, yt_dlp},
+};
+
 mod cli;
+mod installer;
 mod primitives;
 mod util;
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = cli().get_matches();
 
     let mut options = Options {
+        boost: matches.contains_id("brightness-boost"),
         redimension: *matches.get_one::<OutputSize>("frame-size").unwrap(),
         colorize: matches.contains_id("colorize"),
         skip_compression: matches.contains_id("no-compression"),
         style: *matches.get_one::<PaintStyle>("style").unwrap(),
         compression_threshold: *matches.get_one::<u8>("compression-threshold").unwrap(),
         skip_audio: matches.contains_id("no-audio"),
+        should_delete_video: matches.is_present("delete"),
     };
 
     if options.redimension == OutputSize(0, 0) {
@@ -67,8 +79,31 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let video_path = matches.get_one::<String>("video").unwrap();
     let mut output = matches.get_one::<PathBuf>("output").unwrap().clone();
+
+    let rt = Runtime::new()?;
+
+    let (ffmpeg_path, ffprobe_path) = setup_ffmpeg(&rt)?;
+
+    let video_path = &{
+        if let Some(path) = matches.get_one::<String>("video") {
+            path.clone()
+        } else {
+            let ytdlp_path = setup_ytdlp(&rt)?;
+            let mp4_output = format!("{}{}", output.to_str().unwrap(), ".mp4");
+            yt_dlp(
+                &ytdlp_path,
+                matches.get_one::<String>("youtube").unwrap(),
+                &mp4_output,
+            )?;
+            mp4_output
+        }
+    };
+
+    dbg!(video_path);
+    let cloned_video_path = video_path.clone();
+
+    let fps = probe_fps(video_path, &ffprobe_path)?;
 
     let tmp = Arc::new(TempDir::new_in(".")?);
     let tmp_path = tmp.path();
@@ -79,13 +114,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stop_handle = Arc::clone(&should_stop);
     ctrlc::set_handler(move || {
         stop_handle.store(true, Ordering::Relaxed);
-        clean_abort(tmp_handler.path());
+        clean_abort(
+            tmp_handler.path(),
+            options.should_delete_video,
+            &cloned_video_path,
+        );
     })?;
 
     println!(">=== Running FFMPEG ===<");
 
     // Split file into frames
     ffmpeg(
+        &ffmpeg_path,
         &[
             "-r",
             "1",
@@ -98,12 +138,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         &ffmpeg_flags,
     )
     .unwrap_or_else(|_| {
-        clean_abort(tmp_path);
+        clean_abort(tmp_path, options.should_delete_video, video_path);
     });
 
     // Extract audio
     if !options.skip_audio {
         ffmpeg(
+            &ffmpeg_path,
             &[
                 "-i",
                 video_path,
@@ -112,7 +153,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             &ffmpeg_flags,
         )
         .unwrap_or_else(|_| {
-            clean_abort(tmp_path);
+            clean_abort(tmp_path, options.should_delete_video, video_path);
         });
     }
 
@@ -124,7 +165,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("\nStarting frame generation ...");
 
-    read_frames(frames, tmp_path, &mut output, options, &should_stop);
+    read_frames(
+        frames,
+        tmp_path,
+        &mut output,
+        options,
+        &should_stop,
+        video_path,
+        fps,
+    );
 
     println!(
         "\n\n\
@@ -133,7 +182,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         output.display()
     );
 
-    clean(tmp_path);
+    clean(tmp_path, options.should_delete_video, video_path);
     Ok(())
 }
 
@@ -143,6 +192,8 @@ fn read_frames(
     output: &mut PathBuf,
     options: Options,
     should_stop: &Arc<AtomicBool>,
+    video_path: &str,
+    fps: usize,
 ) {
     output.set_extension("bapple");
     let processed = AtomicUsize::new(0);
@@ -163,7 +214,7 @@ fn read_frames(
                     eprintln!("You should try rerunning this program.");
                     eprintln!("In any case, here's the error message: \n\n{error:?}");
 
-                    clean_abort(tmp_path); // Prevents littering temporary directory when image processing fails
+                    clean_abort(tmp_path, options.should_delete_video, video_path); // Prevents littering temporary directory when image processing fails
                 }
             };
 
@@ -195,7 +246,7 @@ fn read_frames(
         add_file(&mut tar_archive, &inside_path, &data).unwrap();
     }
 
-    // Finally add the audio to the archive and finish
+    // Finally add the audio and metadata to the archive and finish
     if !options.skip_audio {
         let mut audio = File::open(tmp_path.join("audio.mp3")).unwrap();
         let mut data = Vec::new();
@@ -203,6 +254,12 @@ fn read_frames(
 
         add_file(&mut tar_archive, "audio.mp3", &data).unwrap();
     }
+
+    let metadata = ron::Options::default()
+        .to_string_pretty(&Metadata::new(fps), PrettyConfig::default())
+        .unwrap();
+
+    add_file(&mut tar_archive, "metadata.ron", metadata.as_bytes()).unwrap();
 
     tar_archive.finish().unwrap();
 }
@@ -234,15 +291,15 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
 
             let brightness = r.max(g).max(b);
 
-            let (thresholds, chars) = if let FgPaint = options.style {
+            let (thresholds, chars) = if options.boost {
                 (
-                    [20, 40, 80, 100, 130, 200, 250],
-                    [' ', '.', ':', '-', '=', '+', '#'],
+                    [5, 10, 15, 20, 25, 40, 200],
+                    [' ', '.', ':', '-', '+', '=', '#'],
                 )
             } else {
                 (
-                    [5, 10, 15, 20, 25, 40, 200],
-                    [' ', '.', ':', '-', '=', '+', '#'],
+                    [20, 40, 80, 100, 130, 200, 250],
+                    [' ', '.', ':', '-', '+', '=', '#'],
                 )
             };
 

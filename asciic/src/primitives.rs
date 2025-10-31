@@ -1,16 +1,21 @@
 use clap::{
-    builder::{TypedValueParser, ValueParserFactory},
     ErrorKind, ValueEnum,
+    builder::{TypedValueParser, ValueParserFactory},
+    crate_version,
 };
+use serde::Serialize;
 
 #[derive(Clone, Copy)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Options {
+    pub boost: bool,
     pub compression_threshold: u8,
     pub redimension: OutputSize,
     pub skip_compression: bool,
     pub style: PaintStyle,
     pub colorize: bool,
     pub skip_audio: bool,
+    pub should_delete_video: bool,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -71,5 +76,27 @@ impl TypedValueParser for OutputSizeParser {
         }
 
         Ok(output_size)
+    }
+}
+
+#[non_exhaustive]
+#[derive(Serialize)]
+pub struct Metadata {
+    fps: usize,
+    asciic_version: &'static str,
+    comment: &'static str,
+}
+
+const COMMENT: &str = "If you're reading this, you're probably using an outdated version of bplay.\n\
+                       Go ahead and update it on https://github.com/S0raWasTaken/bapple_player if you want.\n\
+                       It sets the FPS automatically now, so go on, have fun.";
+
+impl Metadata {
+    pub fn new(fps: usize) -> Self {
+        Self {
+            fps,
+            asciic_version: crate_version!(),
+            comment: COMMENT,
+        }
     }
 }

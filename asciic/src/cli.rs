@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{value_parser, Arg, Command};
+use clap::{Arg, Command, value_parser};
 
 use crate::primitives::{OutputSize, PaintStyle};
 
@@ -14,10 +14,26 @@ pub fn cli() -> Command<'static> {
 }
 
 #[inline]
-fn args() -> [Arg<'static>; 10] {
+fn args() -> [Arg<'static>; 13] {
     [
+        Arg::new("delete")
+            .short('d')
+            .long("delete")
+            .help("Deletes the yt-dlp's mp4 output")
+            .requires("youtube"),
+        Arg::new("youtube")
+            .short('y')
+            .long("youtube")
+            .help("Grabs the video directly from youtube. Use quotation marks for the link.")
+            .conflicts_with("video")
+            .takes_value(true),
+        Arg::new("brightness-boost")
+            .requires("colorize")
+            .short('b')
+            .long("boost")
+            .help("Boosts the brightness values."),
         Arg::new("video")
-            .required_unless_present("image")
+            .required_unless_present_any(["image", "youtube"])
             .conflicts_with("image")
             .index(1)
             .help("Input video to transform in asciinema")
@@ -25,9 +41,10 @@ fn args() -> [Arg<'static>; 10] {
         Arg::new("output")
             .value_parser(value_parser!(PathBuf))
             .default_value("output")
+            .short('o')
+            .long("output")
             .conflicts_with("image")
-            .help("Output file name")
-            .index(2),
+            .help("Output file name"),
         Arg::new("frame-size")
             .short('s')
             .default_value("0x0")
@@ -67,7 +84,7 @@ fn args() -> [Arg<'static>; 10] {
             .last(true),
         Arg::new("no-audio")
             .long("no-audio")
-            .help("Skips audio generation")
+            .help("Skips audio extraction")
             .conflicts_with("image"),
         Arg::new("style")
             .requires("colorize")
