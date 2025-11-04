@@ -75,6 +75,9 @@ impl TypedValueParser for OutputSizeParser {
             eprintln!("WARN: Usually going too high on frame size makes stuff a bit wonky.");
         }
 
+        // I mean, why would you want to resize the image to u32::MAX?
+        assert!(output_size.0 < u32::MAX as usize || output_size.1 < u32::MAX as usize);
+
         Ok(output_size)
     }
 }
