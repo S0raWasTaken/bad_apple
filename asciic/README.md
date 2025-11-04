@@ -5,10 +5,14 @@ This project was made as a helper to compile videos into asciinema, mainly focus
 <br>It is one of the steps I took before working on my bad apple kernel & OS (WIP)
 
 ## Installation instructions
-You must have `cargo`, `rustc` and `ffmpeg` (binary) installed.
+You must have `cargo` and `rustc` installed. FFmpeg and yt-dlp will be downloaded and managed automatically.
 ```sh
 cargo install --git https://github.com/S0raWasTaken/bad_apple asciic
 ```
+
+FFmpeg & yt-dlp can be found in:
+- `%APPDATA%\asciic-bin\` on Windows, or:
+- `$HOME/.local/share/asciic-bin/` on Linux.
 
 ## Usage
 > --help output:

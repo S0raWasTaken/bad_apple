@@ -9,4 +9,4 @@ The end goal is to make a kernel & legacy bootloader that together play bad appl
 
 ## Copying
 Everything in this repository is licensed under the [MIT](LICENSE) license.<br>
-TL;DR do what you want ¯\_(ツ)_/¯
+TL;DR do what you want ¯\\_(ツ)_/¯

@@ -72,7 +72,7 @@ impl TypedValueParser for OutputSizeParser {
         );
 
         if output_size.0 > 400 || output_size.1 > 200 {
-            println!("WARN: Usually going too high on frame size makes stuff a bit wonky.");
+            eprintln!("WARN: Usually going too high on frame size makes stuff a bit wonky.");
         }
 
         Ok(output_size)

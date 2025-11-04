@@ -100,7 +100,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    dbg!(video_path);
     let cloned_video_path = video_path.clone();
 
     let fps = probe_fps(video_path, &ffprobe_path)?;
@@ -268,12 +267,8 @@ fn process_image(image: &PathBuf, options: Options) -> Result<String, ImageError
     let image = Reader::open(image)?.decode()?;
 
     let resized_image = image.resize_exact(
-        u32::try_from(options.redimension.0).expect(
-            "... Why are you trying to make the width larger than the 32bit integer limit?????",
-        ),
-        u32::try_from(options.redimension.1).expect(
-            "... Why are you trying to make the height larger than the 32bit integer limit?????",
-        ),
+        u32::try_from(options.redimension.0).unwrap(),
+        u32::try_from(options.redimension.1).unwrap(),
         FilterType::Nearest,
     );
 

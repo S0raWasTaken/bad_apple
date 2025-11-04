@@ -66,12 +66,16 @@ pub fn setup_ytdlp(rt: &Runtime) -> Result<PathBuf, Box<dyn Error>> {
 
     println!("Checking for yt-dlp updates...");
 
-    Command::new(&ytdlp_output)
+    let output = Command::new(&ytdlp_output)
         .arg("-U")
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .output()?;
+
+    if !output.status.success() {
+        eprintln!("yt-dlp update check failed");
+    }
 
     Ok(ytdlp_output)
 }
