@@ -1,0 +1,3 @@
+[submodule "bplay"]
+	path = bplay
+	url = https://github.com/S0raWasTaken/bapple_player

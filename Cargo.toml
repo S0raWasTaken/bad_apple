@@ -1,8 +1,9 @@
 [workspace]
+resolver = "3"
 members = [
 	"asciic",
 	"asciild",
-	"asciix"
+	"bplay"
 ]
 
 [profile.dev]
