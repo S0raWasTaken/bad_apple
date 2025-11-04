@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cloned_video_path = video_path.clone();
 
-    let fps = probe_fps(video_path, &ffprobe_path)?;
+    let fps_frametime = probe_fps(video_path, &ffprobe_path)?;
 
     let tmp = Arc::new(TempDir::new_in(".")?);
     let tmp_path = tmp.path();
@@ -171,7 +171,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         options,
         &should_stop,
         video_path,
-        fps,
+        fps_frametime,
     );
 
     println!(
@@ -192,7 +192,7 @@ fn read_frames(
     options: Options,
     should_stop: &Arc<AtomicBool>,
     video_path: &str,
-    fps: usize,
+    (fps, frametime): (usize, usize),
 ) {
     output.set_extension("bapple");
     let processed = AtomicUsize::new(0);
@@ -255,7 +255,7 @@ fn read_frames(
     }
 
     let metadata = ron::Options::default()
-        .to_string_pretty(&Metadata::new(fps), PrettyConfig::default())
+        .to_string_pretty(&Metadata::new(fps, frametime), PrettyConfig::default())
         .unwrap();
 
     add_file(&mut tar_archive, "metadata.ron", metadata.as_bytes()).unwrap();

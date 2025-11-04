@@ -86,7 +86,8 @@ pub fn ffmpeg(
     Ok(())
 }
 
-pub fn probe_fps(path: &str, ffprobe_path: &Path) -> Result<usize, Box<dyn Error>> {
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn probe_fps(path: &str, ffprobe_path: &Path) -> Result<(usize, usize), Box<dyn Error>> {
     let output = Command::new(ffprobe_path)
         .args([
             "-v",
@@ -106,9 +107,12 @@ pub fn probe_fps(path: &str, ffprobe_path: &Path) -> Result<usize, Box<dyn Error
         return Err("Couldn't automatically detect the stream's framerate.".into());
     };
 
-    // I'm literally rounding it, shut up clippy.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    Ok((number.parse::<f64>()? / denominator.parse::<f64>()?).round() as usize)
+    let number = number.parse::<f64>()?;
+    let denominator = denominator.parse::<f64>()?;
+    let old_fps = (number / denominator).round() as usize;
+
+    let new_frametime = 1_000_000.0 / (number / denominator);
+    Ok((old_fps, new_frametime.round() as usize))
 }
 
 #[inline]

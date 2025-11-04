@@ -85,7 +85,8 @@ impl TypedValueParser for OutputSizeParser {
 #[non_exhaustive]
 #[derive(Serialize)]
 pub struct Metadata {
-    fps: usize,
+    frametime: usize, // Pass frametime directly, so we don't have issues dealing with fps values like: 29.33
+    fps: usize,       // Old value, will still be passed for old bplay versions.
     asciic_version: &'static str,
     comment: &'static str,
 }
@@ -95,8 +96,9 @@ const COMMENT: &str = "If you're reading this, you're probably using an outdated
                        It sets the FPS automatically now, so go on, have fun.";
 
 impl Metadata {
-    pub fn new(fps: usize) -> Self {
+    pub fn new(fps: usize, frametime: usize) -> Self {
         Self {
+            frametime,
             fps,
             asciic_version: crate_version!(),
             comment: COMMENT,
