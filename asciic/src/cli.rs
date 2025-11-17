@@ -73,7 +73,9 @@ impl Args {
         if let Some(mut output) = self.output.clone() {
             match input {
                 Input::Image(_) => output.set_extension("txt"),
-                Input::Video(_) => output.set_extension("bapple"),
+                Input::Video(_) | Input::YoutubeLink(_) => {
+                    output.set_extension("bapple")
+                }
             };
             return (input, output);
         }
@@ -87,6 +89,7 @@ impl Args {
                 video_path.set_extension("bapple");
                 video_path.clone()
             }
+            Input::YoutubeLink(_) => unreachable!(),
         };
 
         (input, output)
@@ -97,7 +100,7 @@ impl Args {
         [
             self.video.as_ref().map(|v| Input::Video(v.clone())),
             self.image.as_ref().map(|i| Input::Image(i.clone())),
-            self.youtube.as_ref().map(|_link| todo!()), // TODO: yt-dlp
+            self.youtube.as_ref().map(|link| Input::YoutubeLink(link.clone())),
         ]
         .into_iter()
         .flatten()

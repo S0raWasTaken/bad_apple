@@ -15,8 +15,9 @@ use tar::{Builder, Header};
 use tempfile::TempDir;
 use zstd::encode_all;
 
-use crate::children::ffprobe;
+use crate::children::{ffprobe, yt_dlp};
 use crate::colours::{BOLD, RESET, YELLOW};
+use crate::installer::Dependencies;
 use crate::{
     Res,
     children::ffmpeg,
@@ -39,6 +40,7 @@ impl Metadata {
 pub enum Input {
     Video(PathBuf),
     Image(PathBuf),
+    YoutubeLink(String),
 }
 
 pub struct Charset(pub Vec<u8>, pub Vec<char>, pub char);
@@ -74,6 +76,7 @@ pub struct AsciiCompiler {
     pub stop_handle: AtomicBool,
     pub temp_dir: TempDir,
     dimensions: (u32, u32),
+    dependencies: Dependencies,
 
     // Set by args from now on ↓
     input: Input,
@@ -104,10 +107,13 @@ impl AsciiCompiler {
             return Err("Could not detect the terminal's window size.".into());
         };
 
+        let dependencies = Dependencies::setup()?;
+
         Ok(Self {
             stop_handle,
             temp_dir,
             dimensions,
+            dependencies,
             input,
             colorize,
             no_audio,
@@ -118,14 +124,11 @@ impl AsciiCompiler {
         })
     }
 
-    pub fn install_deps(&self) -> Res<()> {
-        Ok(())
-    }
-
     pub fn compile(&self) -> Res<()> {
         match &self.input {
             Input::Video(video) => self.make_video(video),
             Input::Image(image) => self.make_image(image),
+            Input::YoutubeLink(link) => self.make_youtube(link),
         }?;
 
         println!(
@@ -136,10 +139,23 @@ impl AsciiCompiler {
         Ok(())
     }
 
+    fn make_youtube(&self, link: &str) -> Res<()> {
+        let mut temporary_video = self.output.clone();
+        temporary_video.set_extension("mp4");
+
+        yt_dlp(
+            &self.dependencies.ytdlp,
+            link,
+            &temporary_video.display().to_string(),
+        )?;
+
+        self.make_video(&temporary_video)
+    }
+
     fn make_video(&self, video: &Path) -> Res<()> {
         let video_path = video.to_str().unwrap();
         let (fps, frametime): (u64, u64) =
-            ffprobe(&PathBuf::from("ffprobe"), video_path)?;
+            ffprobe(&self.dependencies.ffprobe, video_path)?;
         self.split_video_frames(video_path)?;
         if !self.no_audio {
             self.extract_audio(video_path)?;
@@ -230,6 +246,7 @@ impl AsciiCompiler {
                 let char = self.charset.match_char(brightness);
                 if !self.colorize {
                     frame.push(char);
+                    continue;
                 }
 
                 let char = match self.style {
@@ -277,9 +294,8 @@ impl AsciiCompiler {
 
     #[inline]
     fn split_video_frames(&self, video_path: &str) -> Res<()> {
-        // TODO: Handle local yt-dlp, ffmpeg & ffprobe installation.
         ffmpeg(
-            &PathBuf::from("ffmpeg"),
+            &self.dependencies.ffmpeg,
             &[
                 "-r",
                 "1",
@@ -295,7 +311,7 @@ impl AsciiCompiler {
     #[inline]
     fn extract_audio(&self, video_path: &str) -> Res<()> {
         ffmpeg(
-            &PathBuf::from("ffmpeg"),
+            &self.dependencies.ffmpeg,
             &[
                 "-i",
                 video_path,

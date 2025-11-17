@@ -1,6 +1,7 @@
 use std::{
     error::Error,
     fs::remove_dir_all,
+    process::exit,
     sync::{Arc, atomic::Ordering::Relaxed},
 };
 
@@ -17,12 +18,13 @@ type Res<T> = Result<T, Box<dyn Error + Send + Sync>>;
 mod children;
 mod cli;
 mod colours;
+mod installer;
 mod primitives;
 fn main() -> Res<()> {
     let ascii_compiler = Arc::new(AsciiCompiler::new(Args::parse())?);
+
     register_ctrl_c_handle(ascii_compiler.clone())?;
 
-    ascii_compiler.install_deps()?;
     ascii_compiler.compile()?;
 
     cleanup(ascii_compiler);
@@ -32,7 +34,7 @@ fn main() -> Res<()> {
 fn abort_cleanly(ascii_compiler: Arc<AsciiCompiler>) -> ! {
     cleanup(ascii_compiler);
     eprintln!("{YELLOW}Cleanup successful, now aborting...");
-    todo!()
+    exit(1);
 }
 
 fn cleanup(ascii_compiler: Arc<AsciiCompiler>) {

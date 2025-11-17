@@ -54,3 +54,13 @@ pub fn ffprobe(ffprobe_path: &Path, video_path: &str) -> Res<(u64, u64)> {
 
     Ok((fps.round() as u64, (1_000_000.0 / fps).round() as u64))
 }
+
+pub fn yt_dlp(ytdlp_path: &Path, url: &str, output: &str) -> Res<()> {
+    Command::new(ytdlp_path)
+        .args(["-t", "mp4", "-o", output, url])
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()?;
+    Ok(())
+}
