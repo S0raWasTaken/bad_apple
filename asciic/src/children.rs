@@ -3,9 +3,12 @@ use std::{
     path::Path,
     process::{Command, Stdio},
     str::from_utf8,
+    sync::atomic::{AtomicBool, Ordering::SeqCst},
 };
 
 use crate::Res;
+
+pub static FFMPEG_RUNNING: AtomicBool = AtomicBool::new(false);
 
 pub fn ffmpeg(ffmpeg_path: &Path, args: &[&str]) -> Res<()> {
     let mut command = Command::new(ffmpeg_path);
@@ -15,9 +18,13 @@ pub fn ffmpeg(ffmpeg_path: &Path, args: &[&str]) -> Res<()> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    let output = command.output()?;
+    FFMPEG_RUNNING.store(true, SeqCst);
 
-    if !output.status.success() {
+    let output = command.output();
+
+    FFMPEG_RUNNING.store(false, SeqCst);
+
+    if !output?.status.success() {
         return Err("FFMPEG failed to run".into());
     }
 

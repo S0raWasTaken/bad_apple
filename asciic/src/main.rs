@@ -1,13 +1,13 @@
+use std::process::exit;
+use std::sync::atomic::Ordering::SeqCst;
 use std::{
-    error::Error,
-    fs::remove_dir_all,
-    process::exit,
-    sync::{Arc, atomic::Ordering::Relaxed},
+    error::Error, fs::remove_dir_all, sync::Arc, thread::sleep, time::Duration,
 };
 
 use clap::Parser;
 
 use crate::{
+    children::FFMPEG_RUNNING,
     cli::Args,
     colours::{RED, YELLOW},
     primitives::AsciiCompiler,
@@ -25,34 +25,41 @@ fn main() -> Res<()> {
 
     register_ctrl_c_handle(ascii_compiler.clone())?;
 
-    ascii_compiler.compile()?;
+    let mut status_code = 0;
+    if let Err(error) = ascii_compiler.compile() {
+        eprintln!("{RED}{error:?}");
+        status_code = 1;
+    }
 
-    cleanup(ascii_compiler);
-    Ok(())
-}
-
-fn abort_cleanly(ascii_compiler: Arc<AsciiCompiler>) -> ! {
-    cleanup(ascii_compiler);
-    eprintln!("{YELLOW}Cleanup successful, now aborting...");
-    exit(1);
-}
-
-fn cleanup(ascii_compiler: Arc<AsciiCompiler>) {
-    eprintln!("\n{YELLOW}Cleaning up...");
-    let tmp_dir_path = ascii_compiler.temp_dir.path();
-
-    // Manual cleanup, because we can't move temp_dir.
-    remove_dir_all(tmp_dir_path).unwrap_or_else(|_| {
-        panic!(
-            "{RED}remove_dir_all() failed. Check for littering on {tmp_dir_path:?}"
-        )
-    });
+    cleanup(ascii_compiler)?;
+    exit(status_code);
 }
 
 fn register_ctrl_c_handle(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
     ctrlc::set_handler(move || {
-        ascii_compiler.stop_handle.store(true, Relaxed);
-        abort_cleanly(ascii_compiler.clone());
+        ascii_compiler.stop_handle.store(true, SeqCst);
     })?;
+    Ok(())
+}
+
+fn cleanup(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
+    println!("\n{YELLOW}Cleaning up...");
+    let tmp_dir_path = ascii_compiler.temp_dir.path();
+
+    // Wait for ffmpeg before removing the directory
+    let timeout = Duration::from_secs(30);
+    let start = std::time::Instant::now();
+
+    while FFMPEG_RUNNING.load(SeqCst) {
+        if start.elapsed() > timeout {
+            eprintln!(
+                "{RED}Warning: ffmpeg did not finish within timeout, proceeding with cleanup"
+            );
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    remove_dir_all(tmp_dir_path)?;
     Ok(())
 }
