@@ -6,16 +6,22 @@ use std::{
 
 use clap::Parser;
 
-use crate::{cli::Args, colours::YELLOW, primitives::AsciiCompiler};
+use crate::{
+    cli::Args,
+    colours::{RED, YELLOW},
+    primitives::AsciiCompiler,
+};
 
-type Res<T> = Result<T, Box<dyn Error>>;
+type Res<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
+mod children;
 mod cli;
 mod colours;
 mod primitives;
 fn main() -> Res<()> {
     let program = Arc::new(AsciiCompiler::new(Args::parse())?);
     register_ctrl_c_handle(program)?;
+
     Ok(())
 }
 
@@ -28,9 +34,11 @@ fn abort_cleanly(program: Arc<AsciiCompiler>) -> ! {
 fn cleanup(program: Arc<AsciiCompiler>) {
     eprintln!("\n\n{YELLOW}Cleaning up...");
     let tmp_dir_path = program.temp_dir.path();
+
+    // Manual cleanup, because we can't move temp_dir.
     remove_dir_all(tmp_dir_path).unwrap_or_else(|_| {
         panic!(
-            "remove_dir_all() failed. Check for littering on {tmp_dir_path:?}"
+            "{RED}remove_dir_all() failed. Check for littering on {tmp_dir_path:?}"
         )
     });
 }

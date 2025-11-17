@@ -11,6 +11,16 @@ pub enum Style {
     BgOnly,
 }
 
+impl Style {
+    pub fn ansi(&self) -> u8 {
+        match self {
+            Style::FgPaint => 3,
+            Style::BgPaint => 4,
+            Style::BgOnly => 4,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(version(crate_version!()))]
 pub struct Args {
@@ -41,11 +51,46 @@ pub struct Args {
     /// Sets the output style
     #[arg(short, long, default_value = "bg-only")]
     pub style: Style,
+
+    /// Sets a custom path to create a temporary directory.
+    /// It could be used to write the temporary files in memory,
+    /// if the user sets this to /dev/shm
+    #[arg(long, default_value = ".")]
+    pub temp: PathBuf,
+
+    /// Sets the colour compression threshold.
+    #[arg(short, long, default_value = "3")]
+    pub threshold: u8,
 }
 
 impl Args {
-    // Sorts out video or image + calls yt-dlp in case a link is passed
-    pub fn handle_input(&self) -> Input {
+    /// Sorts out the Input and Output options and return them.
+    pub fn handle_io(&self) -> (Input, PathBuf) {
+        let input = self.handle_input();
+        if let Some(mut output) = self.output.clone() {
+            match input {
+                Input::Image(_) => output.set_extension("txt"),
+                Input::Video(_) => output.set_extension("bapple"),
+            };
+            return (input, output);
+        }
+
+        let output = match input.clone() {
+            Input::Image(mut image_path) => {
+                image_path.set_extension("txt");
+                image_path.clone()
+            }
+            Input::Video(mut video_path) => {
+                video_path.set_extension("bapple");
+                video_path.clone()
+            }
+        };
+
+        (input, output)
+    }
+
+    /// Sorts out video or image + calls yt-dlp in case a link is passed
+    fn handle_input(&self) -> Input {
         [
             self.video.as_ref().map(|v| Input::Video(v.clone())),
             self.image.as_ref().map(|i| Input::Image(i.clone())),
