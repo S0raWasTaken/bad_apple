@@ -54,7 +54,7 @@ pub fn ffprobe(ffprobe_path: &Path, video_path: &str) -> Res<(u64, u64)> {
         .map(|n_str| n_str.parse::<f64>())
         .collect::<Result<Vec<f64>, ParseFloatError>>()?[..]
     else {
-        return Err("Could detect the stream's framerate".into());
+        return Err("Could not detect the stream's framerate".into());
     };
 
     let fps = number / denominator;
