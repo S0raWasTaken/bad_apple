@@ -218,14 +218,13 @@ impl AsciiCompiler {
                     last_colorized_pixel,
                 );
 
-                last_colorized_pixel = current_pixel;
-
                 if max_colour_diff > self.threshold || x == 0 {
                     write!(
                         frame,
                         "\x1b[{}8;2;{r};{g};{b}m{char}",
                         self.style.ansi()
                     )?;
+                    last_colorized_pixel = current_pixel;
                 } else {
                     frame.push(char)
                 }
@@ -239,9 +238,10 @@ impl AsciiCompiler {
         Ok(frame)
     }
 
+    #[inline]
     fn make_image(&self, image: &PathBuf) -> Res<()> {
-        let frame = self.make_frame(image)?;
-        File::create(self.output.clone())?.write_all(frame.as_bytes())?;
+        File::create(self.output.clone())?
+            .write_all(self.make_frame(image)?.as_bytes())?;
         Ok(())
     }
     #[inline]
