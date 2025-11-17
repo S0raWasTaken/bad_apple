@@ -61,6 +61,9 @@ pub struct Args {
     /// Sets the colour compression threshold.
     #[arg(short, long, default_value = "3")]
     pub threshold: u8,
+
+    #[arg(long, default_value = " .:-+=#@")]
+    pub charset: String,
 }
 
 impl Args {

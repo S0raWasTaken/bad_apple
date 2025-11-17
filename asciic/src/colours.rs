@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 // Colours for console messages
 
+pub const BOLD: &str = "\x1b[1m";
 pub const RESET: &str = "\x1b[0m";
 pub const BLACK: &str = "\x1b[30m";
 pub const RED: &str = "\x1b[31m";

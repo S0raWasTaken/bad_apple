@@ -9,12 +9,14 @@ use std::{path::PathBuf, sync::atomic::AtomicBool};
 use clap::crate_version;
 use image::{GenericImageView, ImageReader, imageops::FilterType::Nearest};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use ron::ser::PrettyConfig;
 use serde::Serialize;
 use tar::{Builder, Header};
 use tempfile::TempDir;
 use zstd::encode_all;
 
-use crate::colours::RESET;
+use crate::children::ffprobe;
+use crate::colours::{BOLD, RESET, YELLOW};
 use crate::{
     Res,
     children::ffmpeg,
@@ -23,12 +25,12 @@ use crate::{
 
 #[derive(Serialize)]
 pub struct Metadata {
-    frametime: usize,
-    fps: usize,
+    frametime: u64,
+    fps: u64,
     asciic_version: &'static str,
 }
 impl Metadata {
-    pub fn new(fps: usize, frametime: usize) -> Self {
+    pub fn new(fps: u64, frametime: u64) -> Self {
         Self { frametime, fps, asciic_version: crate_version!() }
     }
 }
@@ -41,16 +43,6 @@ pub enum Input {
 
 pub struct Charset(pub Vec<u8>, pub Vec<char>, pub char);
 
-impl Default for Charset {
-    fn default() -> Self {
-        Self(
-            vec![20, 40, 80, 100, 130, 200, 250],
-            vec![' ', '.', ':', '-', '+', '=', '#'],
-            '@',
-        )
-    }
-}
-
 impl Charset {
     pub fn match_char(&self, brightness: u8) -> char {
         self.0
@@ -58,6 +50,23 @@ impl Charset {
             .zip(self.1.clone())
             .find(|(threshold, _)| brightness <= **threshold)
             .map_or(self.2, |(_, c)| c)
+    }
+
+    fn mkcharset(spec: &str) -> Res<Self> {
+        let mut chars: Vec<char> = spec.chars().collect();
+        chars.insert(0, ' ');
+
+        let steps = chars.len();
+        let mut thresholds = Vec::with_capacity(steps);
+
+        for i in 0..steps {
+            let t =
+                (i as f32 / (steps - 1).max(1) as f32 * 250.0).round() as u8;
+            thresholds.push(t);
+        }
+
+        let last = *chars.last().unwrap();
+        Ok(Self(thresholds, chars, last))
     }
 }
 
@@ -87,8 +96,7 @@ impl AsciiCompiler {
         let no_audio = args.no_audio;
         let threshold = args.threshold;
 
-        // TODO: unhardcode this
-        let charset = Charset::default();
+        let charset = Charset::mkcharset(&args.charset)?;
 
         let Some(dimensions) = term_size::dimensions().map(|(w, h)| {
             (u32::try_from(w).unwrap(), u32::try_from(h).unwrap())
@@ -119,11 +127,19 @@ impl AsciiCompiler {
             Input::Video(video) => self.make_video(video),
             Input::Image(image) => self.make_image(image),
         }?;
+
+        println!(
+            "\n\n{YELLOW}{BOLD}-> Done! <-\n\
+            {RESET}{YELLOW}>> Output available at {RESET}{BOLD}{}{RESET}",
+            self.output.display()
+        );
         Ok(())
     }
 
-    fn make_video(&self, video: &PathBuf) -> Res<()> {
+    fn make_video(&self, video: &Path) -> Res<()> {
         let video_path = video.to_str().unwrap();
+        let (fps, frametime): (u64, u64) =
+            ffprobe(&PathBuf::from("ffprobe"), video_path)?;
         self.split_video_frames(video_path)?;
         if !self.no_audio {
             self.extract_audio(video_path)?;
@@ -173,7 +189,7 @@ impl AsciiCompiler {
             inside_path.set_file_name(path.file_stem().unwrap());
             inside_path.set_extension("zst");
 
-            add_file(&mut tar_archive, path, &compressed_frame)?;
+            add_file(&mut tar_archive, inside_path, &compressed_frame)?;
         }
 
         if !self.no_audio {
@@ -183,6 +199,14 @@ impl AsciiCompiler {
 
             add_file(&mut tar_archive, "audio.mp3", &data)?;
         }
+
+        let metadata = ron::Options::default().to_string_pretty(
+            &Metadata::new(fps, frametime),
+            PrettyConfig::default(),
+        )?;
+
+        add_file(&mut tar_archive, "metadata.ron", metadata.as_bytes())?;
+        tar_archive.finish()?;
 
         Ok(())
     }
@@ -230,7 +254,7 @@ impl AsciiCompiler {
                 }
             }
             if self.colorize {
-                frame.push_str("{RESET}\n");
+                frame.push_str(&format!("{RESET}\n"));
             } else {
                 frame.push('\n');
             }
@@ -284,11 +308,11 @@ impl AsciiCompiler {
 fn add_file(
     tar_archive: &mut Builder<File>,
     path: impl AsRef<Path>,
-    compressed_frame: &[u8],
+    data: &[u8],
 ) -> Res<()> {
     let mut header = Header::new_gnu();
-    header.set_size(compressed_frame.len() as u64);
+    header.set_size(data.len() as u64);
     header.set_cksum();
-    tar_archive.append_data(&mut header, path, compressed_frame)?;
+    tar_archive.append_data(&mut header, path, data)?;
     Ok(())
 }
