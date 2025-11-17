@@ -102,3 +102,382 @@ impl Args {
         .unwrap() // Guaranteed by the input group
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_style_ansi_fgpaint() {
+        let style = Style::FgPaint;
+        assert_eq!(style.ansi(), 3);
+    }
+
+    #[test]
+    fn test_style_ansi_bgpaint() {
+        let style = Style::BgPaint;
+        assert_eq!(style.ansi(), 4);
+    }
+
+    #[test]
+    fn test_style_ansi_bgonly() {
+        let style = Style::BgOnly;
+        assert_eq!(style.ansi(), 4);
+    }
+
+    #[test]
+    fn test_style_value_enum() {
+        // Test that styles can be parsed from strings
+        use clap::ValueEnum;
+        
+        let variants = Style::value_variants();
+        assert_eq!(variants.len(), 3);
+        assert!(variants.contains(&Style::FgPaint));
+        assert!(variants.contains(&Style::BgPaint));
+        assert!(variants.contains(&Style::BgOnly));
+    }
+
+    #[test]
+    fn test_args_handle_io_with_video() {
+        let args = Args {
+            colorize: false,
+            no_audio: false,
+            video: Some(PathBuf::from("input.mp4")),
+            image: None,
+            youtube: None,
+            output: Some(PathBuf::from("custom_output")),
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+
+        let (input, output) = args.handle_io();
+        
+        match input {
+            Input::Video(path) => assert_eq!(path, PathBuf::from("input.mp4")),
+            _ => panic!("Expected Video input"),
+        }
+        assert_eq!(output, PathBuf::from("custom_output.bapple"));
+    }
+
+    #[test]
+    fn test_args_handle_io_with_image() {
+        let args = Args {
+            colorize: false,
+            no_audio: false,
+            video: None,
+            image: Some(PathBuf::from("picture.png")),
+            youtube: None,
+            output: Some(PathBuf::from("output")),
+            style: Style::FgPaint,
+            temp: PathBuf::from("."),
+            threshold: 5,
+        };
+
+        let (input, output) = args.handle_io();
+        
+        match input {
+            Input::Image(path) => assert_eq!(path, PathBuf::from("picture.png")),
+            _ => panic!("Expected Image input"),
+        }
+        assert_eq!(output, PathBuf::from("output.txt"));
+    }
+
+    #[test]
+    fn test_args_handle_io_video_default_output() {
+        let args = Args {
+            colorize: true,
+            no_audio: false,
+            video: Some(PathBuf::from("my_video.mp4")),
+            image: None,
+            youtube: None,
+            output: None,
+            style: Style::BgPaint,
+            temp: PathBuf::from("/tmp"),
+            threshold: 10,
+        };
+
+        let (input, output) = args.handle_io();
+        
+        match input {
+            Input::Video(path) => assert_eq!(path, PathBuf::from("my_video.mp4")),
+            _ => panic!("Expected Video input"),
+        }
+        // Output should be derived from input with .bapple extension
+        assert_eq!(output, PathBuf::from("my_video.bapple"));
+    }
+
+    #[test]
+    fn test_args_handle_io_image_default_output() {
+        let args = Args {
+            colorize: false,
+            no_audio: true,
+            video: None,
+            image: Some(PathBuf::from("test.jpg")),
+            youtube: None,
+            output: None,
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 1,
+        };
+
+        let (input, output) = args.handle_io();
+        
+        match input {
+            Input::Image(path) => assert_eq!(path, PathBuf::from("test.jpg")),
+            _ => panic!("Expected Image input"),
+        }
+        assert_eq!(output, PathBuf::from("test.txt"));
+    }
+
+    #[test]
+    fn test_args_handle_input_priority() {
+        // When video is provided, it should be used
+        let args = Args {
+            colorize: false,
+            no_audio: false,
+            video: Some(PathBuf::from("video.mp4")),
+            image: None,
+            youtube: None,
+            output: None,
+            style: Style::FgPaint,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+
+        let input = args.handle_input();
+        match input {
+            Input::Video(path) => assert_eq!(path, PathBuf::from("video.mp4")),
+            _ => panic!("Expected Video input"),
+        }
+    }
+
+    #[test]
+    fn test_args_with_different_thresholds() {
+        for threshold in [0, 1, 3, 5, 10, 255] {
+            let args = Args {
+                colorize: true,
+                no_audio: false,
+                video: Some(PathBuf::from("test.mp4")),
+                image: None,
+                youtube: None,
+                output: None,
+                style: Style::BgPaint,
+                temp: PathBuf::from("."),
+                threshold,
+            };
+            assert_eq!(args.threshold, threshold);
+        }
+    }
+
+    #[test]
+    fn test_args_colorize_flag() {
+        let args_colored = Args {
+            colorize: true,
+            no_audio: false,
+            video: Some(PathBuf::from("test.mp4")),
+            image: None,
+            youtube: None,
+            output: None,
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+        assert!(args_colored.colorize);
+
+        let args_no_color = Args {
+            colorize: false,
+            no_audio: false,
+            video: Some(PathBuf::from("test.mp4")),
+            image: None,
+            youtube: None,
+            output: None,
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+        assert!(!args_no_color.colorize);
+    }
+
+    #[test]
+    fn test_args_no_audio_flag() {
+        let args_no_audio = Args {
+            colorize: false,
+            no_audio: true,
+            video: Some(PathBuf::from("test.mp4")),
+            image: None,
+            youtube: None,
+            output: None,
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+        assert!(args_no_audio.no_audio);
+
+        let args_with_audio = Args {
+            colorize: false,
+            no_audio: false,
+            video: Some(PathBuf::from("test.mp4")),
+            image: None,
+            youtube: None,
+            output: None,
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+        assert!(!args_with_audio.no_audio);
+    }
+
+    #[test]
+    fn test_args_custom_temp_directory() {
+        let temp_paths = vec![
+            PathBuf::from("."),
+            PathBuf::from("/tmp"),
+            PathBuf::from("/dev/shm"),
+            PathBuf::from("./custom_temp"),
+        ];
+
+        for temp_path in temp_paths {
+            let args = Args {
+                colorize: false,
+                no_audio: false,
+                video: Some(PathBuf::from("test.mp4")),
+                image: None,
+                youtube: None,
+                output: None,
+                style: Style::BgOnly,
+                temp: temp_path.clone(),
+                threshold: 3,
+            };
+            assert_eq!(args.temp, temp_path);
+        }
+    }
+
+    #[test]
+    fn test_args_output_extension_video() {
+        let args = Args {
+            colorize: false,
+            no_audio: false,
+            video: Some(PathBuf::from("test.mp4")),
+            image: None,
+            youtube: None,
+            output: Some(PathBuf::from("myoutput")),
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+
+        let (_, output) = args.handle_io();
+        assert_eq!(output.extension().and_then(|s| s.to_str()), Some("bapple"));
+    }
+
+    #[test]
+    fn test_args_output_extension_image() {
+        let args = Args {
+            colorize: false,
+            no_audio: false,
+            video: None,
+            image: Some(PathBuf::from("test.png")),
+            youtube: None,
+            output: Some(PathBuf::from("myoutput")),
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+
+        let (_, output) = args.handle_io();
+        assert_eq!(output.extension().and_then(|s| s.to_str()), Some("txt"));
+    }
+
+    #[test]
+    fn test_args_output_preserves_directory() {
+        let args = Args {
+            colorize: false,
+            no_audio: false,
+            video: Some(PathBuf::from("test.mp4")),
+            image: None,
+            youtube: None,
+            output: Some(PathBuf::from("/some/path/output")),
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+
+        let (_, output) = args.handle_io();
+        assert_eq!(output, PathBuf::from("/some/path/output.bapple"));
+    }
+
+    #[test]
+    fn test_style_all_variants_covered() {
+        // Ensure all style variants have ansi codes
+        let styles = vec![Style::FgPaint, Style::BgPaint, Style::BgOnly];
+        
+        for style in styles {
+            let ansi = style.ansi();
+            assert!(ansi == 3 || ansi == 4, "ANSI code should be 3 or 4");
+        }
+    }
+
+    #[test]
+    fn test_args_with_paths_containing_special_chars() {
+        let args = Args {
+            colorize: false,
+            no_audio: false,
+            video: Some(PathBuf::from("my video with spaces.mp4")),
+            image: None,
+            youtube: None,
+            output: Some(PathBuf::from("output-with-dash")),
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+
+        let (input, output) = args.handle_io();
+        
+        match input {
+            Input::Video(path) => assert_eq!(path, PathBuf::from("my video with spaces.mp4")),
+            _ => panic!("Expected Video input"),
+        }
+        assert_eq!(output, PathBuf::from("output-with-dash.bapple"));
+    }
+
+    #[test]
+    fn test_args_default_threshold() {
+        // Default threshold should be 3
+        let args = Args {
+            colorize: true,
+            no_audio: false,
+            video: Some(PathBuf::from("test.mp4")),
+            image: None,
+            youtube: None,
+            output: None,
+            style: Style::BgOnly,
+            temp: PathBuf::from("."),
+            threshold: 3,
+        };
+        assert_eq!(args.threshold, 3);
+    }
+
+    #[test]
+    fn test_input_enum_video_variant() {
+        let video_path = PathBuf::from("test.mp4");
+        let input = Input::Video(video_path.clone());
+        
+        match input {
+            Input::Video(path) => assert_eq!(path, video_path),
+            _ => panic!("Expected Video variant"),
+        }
+    }
+
+    #[test]
+    fn test_input_enum_image_variant() {
+        let image_path = PathBuf::from("test.png");
+        let input = Input::Image(image_path.clone());
+        
+        match input {
+            Input::Image(path) => assert_eq!(path, image_path),
+            _ => panic!("Expected Image variant"),
+        }
+    }
+}

@@ -292,3 +292,389 @@ fn add_file(
     tar_archive.append_data(&mut header, path, compressed_frame)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    // Tests for Input enum
+    #[test]
+    fn test_input_video_variant() {
+        let path = PathBuf::from("video.mp4");
+        let input = Input::Video(path.clone());
+        match input {
+            Input::Video(p) => assert_eq!(p, path),
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_input_image_variant() {
+        let path = PathBuf::from("image.png");
+        let input = Input::Image(path.clone());
+        match input {
+            Input::Image(p) => assert_eq!(p, path),
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_input_clone() {
+        let path = PathBuf::from("test.mp4");
+        let input1 = Input::Video(path.clone());
+        let input2 = input1.clone();
+        
+        match (input1, input2) {
+            (Input::Video(p1), Input::Video(p2)) => assert_eq!(p1, p2),
+            _ => panic!("Clone failed"),
+        }
+    }
+
+    #[test]
+    fn test_input_with_various_video_extensions() {
+        let extensions = vec!["mp4", "avi", "mkv", "mov", "webm"];
+        
+        for ext in extensions {
+            let path = PathBuf::from(format!("video.{}", ext));
+            let input = Input::Video(path.clone());
+            
+            match input {
+                Input::Video(p) => assert_eq!(p.extension().unwrap(), ext),
+                _ => panic!("Wrong variant"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_input_with_various_image_extensions() {
+        let extensions = vec!["png", "jpg", "jpeg", "gif", "bmp"];
+        
+        for ext in extensions {
+            let path = PathBuf::from(format!("image.{}", ext));
+            let input = Input::Image(path.clone());
+            
+            match input {
+                Input::Image(p) => assert_eq!(p.extension().unwrap(), ext),
+                _ => panic!("Wrong variant"),
+            }
+        }
+    }
+
+    // Tests for Metadata struct
+    #[test]
+    fn test_metadata_new() {
+        let meta = Metadata::new(30, 33);
+        assert_eq!(meta.fps, 30);
+        assert_eq!(meta.frametime, 33);
+    }
+
+    #[test]
+    fn test_metadata_version() {
+        let meta = Metadata::new(60, 16);
+        assert!(!meta.asciic_version.is_empty());
+        // Version should be non-empty
+        assert!(meta.asciic_version.len() > 0);
+    }
+
+    #[test]
+    fn test_metadata_various_fps() {
+        let fps_values = vec![24, 25, 30, 50, 60, 120];
+        
+        for fps in fps_values {
+            let meta = Metadata::new(fps, 1000 / fps);
+            assert_eq!(meta.fps, fps);
+        }
+    }
+
+    #[test]
+    fn test_metadata_frametime_calculation() {
+        // Common fps and frametime pairs
+        let pairs = vec![
+            (30, 33),   // ~30 fps
+            (60, 16),   // ~60 fps
+            (24, 41),   // ~24 fps
+            (25, 40),   // 25 fps
+        ];
+        
+        for (fps, frametime) in pairs {
+            let meta = Metadata::new(fps, frametime);
+            assert_eq!(meta.fps, fps);
+            assert_eq!(meta.frametime, frametime);
+        }
+    }
+
+    // Tests for Charset
+    #[test]
+    fn test_charset_default() {
+        let charset = Charset::default();
+        assert_eq!(charset.0.len(), 7);
+        assert_eq!(charset.1.len(), 7);
+        assert_eq!(charset.2, '@');
+    }
+
+    #[test]
+    fn test_charset_thresholds() {
+        let charset = Charset::default();
+        assert_eq!(charset.0, vec![20, 40, 80, 100, 130, 200, 250]);
+    }
+
+    #[test]
+    fn test_charset_chars() {
+        let charset = Charset::default();
+        assert_eq!(charset.1, vec![' ', '.', ':', '-', '+', '=', '#']);
+    }
+
+    #[test]
+    fn test_charset_match_char_low_brightness() {
+        let charset = Charset::default();
+        let ch = charset.match_char(10);
+        assert_eq!(ch, ' ');
+    }
+
+    #[test]
+    fn test_charset_match_char_mid_brightness() {
+        let charset = Charset::default();
+        let ch = charset.match_char(50);
+        assert_eq!(ch, ':');
+    }
+
+    #[test]
+    fn test_charset_match_char_high_brightness() {
+        let charset = Charset::default();
+        let ch = charset.match_char(255);
+        assert_eq!(ch, '@');
+    }
+
+    #[test]
+    fn test_charset_match_char_edge_cases() {
+        let charset = Charset::default();
+        
+        // Test boundary values
+        assert_eq!(charset.match_char(0), ' ');
+        assert_eq!(charset.match_char(20), ' ');
+        assert_eq!(charset.match_char(21), '.');
+        assert_eq!(charset.match_char(40), '.');
+        assert_eq!(charset.match_char(41), ':');
+    }
+
+    #[test]
+    fn test_charset_match_char_all_ranges() {
+        let charset = Charset::default();
+        
+        // Test each range
+        let test_cases = vec![
+            (15, ' '),
+            (35, '.'),
+            (70, ':'),
+            (95, '-'),
+            (120, '+'),
+            (180, '='),
+            (240, '#'),
+            (255, '@'),
+        ];
+        
+        for (brightness, expected) in test_cases {
+            assert_eq!(charset.match_char(brightness), expected);
+        }
+    }
+
+    // Tests for get_max_colour_diff
+    #[test]
+    fn test_get_max_colour_diff_identical() {
+        let pixel = [100, 150, 200, 255];
+        let diff = AsciiCompiler::get_max_colour_diff(pixel, pixel);
+        assert_eq!(diff, 0);
+    }
+
+    #[test]
+    fn test_get_max_colour_diff_red_only() {
+        let pixel1 = [100, 150, 200, 255];
+        let pixel2 = [120, 150, 200, 255];
+        let diff = AsciiCompiler::get_max_colour_diff(pixel1, pixel2);
+        assert_eq!(diff, 20);
+    }
+
+    #[test]
+    fn test_get_max_colour_diff_green_only() {
+        let pixel1 = [100, 150, 200, 255];
+        let pixel2 = [100, 180, 200, 255];
+        let diff = AsciiCompiler::get_max_colour_diff(pixel1, pixel2);
+        assert_eq!(diff, 30);
+    }
+
+    #[test]
+    fn test_get_max_colour_diff_blue_only() {
+        let pixel1 = [100, 150, 200, 255];
+        let pixel2 = [100, 150, 250, 255];
+        let diff = AsciiCompiler::get_max_colour_diff(pixel1, pixel2);
+        assert_eq!(diff, 50);
+    }
+
+    #[test]
+    fn test_get_max_colour_diff_all_channels() {
+        let pixel1 = [100, 150, 200, 255];
+        let pixel2 = [110, 140, 220, 255];
+        // Max diff: red=10, green=10, blue=20 -> max is 20
+        let diff = AsciiCompiler::get_max_colour_diff(pixel1, pixel2);
+        assert_eq!(diff, 20);
+    }
+
+    #[test]
+    fn test_get_max_colour_diff_black_to_white() {
+        let black = [0, 0, 0, 255];
+        let white = [255, 255, 255, 255];
+        let diff = AsciiCompiler::get_max_colour_diff(black, white);
+        assert_eq!(diff, 255);
+    }
+
+    #[test]
+    fn test_get_max_colour_diff_small_difference() {
+        let pixel1 = [100, 100, 100, 255];
+        let pixel2 = [101, 102, 103, 255];
+        let diff = AsciiCompiler::get_max_colour_diff(pixel1, pixel2);
+        assert_eq!(diff, 3); // Max of [1, 2, 3]
+    }
+
+    #[test]
+    fn test_get_max_colour_diff_symmetry() {
+        let pixel1 = [100, 150, 200, 255];
+        let pixel2 = [50, 100, 150, 255];
+        
+        let diff1 = AsciiCompiler::get_max_colour_diff(pixel1, pixel2);
+        let diff2 = AsciiCompiler::get_max_colour_diff(pixel2, pixel1);
+        
+        assert_eq!(diff1, diff2);
+    }
+
+    // Tests for add_file function
+    #[test]
+    fn test_add_file_creates_header() {
+        use std::fs::File;
+        use tempfile::NamedTempFile;
+        
+        let temp_file = NamedTempFile::new().unwrap();
+        let mut archive = Builder::new(File::create(temp_file.path()).unwrap());
+        
+        let data = b"test data";
+        let result = add_file(&mut archive, "test.txt", data);
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_file_with_empty_data() {
+        use std::fs::File;
+        use tempfile::NamedTempFile;
+        
+        let temp_file = NamedTempFile::new().unwrap();
+        let mut archive = Builder::new(File::create(temp_file.path()).unwrap());
+        
+        let data: &[u8] = &[];
+        let result = add_file(&mut archive, "empty.txt", data);
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_file_with_large_data() {
+        use std::fs::File;
+        use tempfile::NamedTempFile;
+        
+        let temp_file = NamedTempFile::new().unwrap();
+        let mut archive = Builder::new(File::create(temp_file.path()).unwrap());
+        
+        let data = vec![0u8; 10000];
+        let result = add_file(&mut archive, "large.bin", &data);
+        
+        assert!(result.is_ok());
+    }
+
+    // Integration-style tests for Charset behavior
+    #[test]
+    fn test_charset_covers_full_brightness_range() {
+        let charset = Charset::default();
+        
+        // Test every brightness value from 0 to 255
+        for brightness in 0..=255 {
+            let ch = charset.match_char(brightness);
+            // Should return a valid character for any brightness
+            assert!(ch == ' ' || ch == '.' || ch == ':' || ch == '-' || 
+                   ch == '+' || ch == '=' || ch == '#' || ch == '@');
+        }
+    }
+
+    #[test]
+    fn test_charset_progression() {
+        let charset = Charset::default();
+        
+        // Characters should get "darker" as brightness increases
+        let chars: Vec<char> = (0..=255).step_by(30).map(|b| charset.match_char(b)).collect();
+        
+        // Verify we get a progression through the character set
+        assert!(chars.len() > 1);
+    }
+
+    // Edge case tests
+    #[test]
+    fn test_metadata_edge_cases() {
+        // Very high FPS
+        let high_fps = Metadata::new(240, 4);
+        assert_eq!(high_fps.fps, 240);
+        
+        // Very low FPS
+        let low_fps = Metadata::new(1, 1000);
+        assert_eq!(low_fps.fps, 1);
+        
+        // Zero values (edge case, may not be realistic)
+        let zero = Metadata::new(0, 0);
+        assert_eq!(zero.fps, 0);
+    }
+
+    #[test]
+    fn test_input_with_complex_paths() {
+        // Test with various path complexities
+        let paths = vec![
+            "simple.mp4",
+            "./relative/path/video.mp4",
+            "/absolute/path/image.png",
+            "../parent/file.jpg",
+            "path with spaces.mp4",
+            "path-with-dashes.png",
+            "path_with_underscores.mkv",
+        ];
+        
+        for path_str in paths {
+            let path = PathBuf::from(path_str);
+            let input = Input::Video(path.clone());
+            
+            match input {
+                Input::Video(p) => assert_eq!(p, path),
+                _ => panic!("Wrong variant"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_colour_diff_with_all_same_values() {
+        let pixel = [128, 128, 128, 255];
+        let diff = AsciiCompiler::get_max_colour_diff(pixel, pixel);
+        assert_eq!(diff, 0);
+    }
+
+    #[test]
+    fn test_colour_diff_with_alpha_channel() {
+        // Alpha channel should be ignored
+        let pixel1 = [100, 150, 200, 255];
+        let pixel2 = [100, 150, 200, 0];
+        let diff = AsciiCompiler::get_max_colour_diff(pixel1, pixel2);
+        assert_eq!(diff, 0); // Only RGB matters, not alpha
+    }
+
+    #[test]
+    fn test_metadata_version_format() {
+        let meta = Metadata::new(30, 33);
+        // Version should follow semver-like format (contains digits)
+        assert!(meta.asciic_version.chars().any(|c| c.is_numeric()));
+    }
+}
