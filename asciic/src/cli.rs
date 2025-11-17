@@ -71,7 +71,7 @@ impl Args {
     pub fn handle_io(&self) -> (Input, PathBuf) {
         let input = self.handle_input();
         if let Some(mut output) = self.output.clone() {
-            match input {
+            match &input {
                 Input::Image(_) => output.set_extension("txt"),
                 Input::Video(_) | Input::YoutubeLink(_) => {
                     output.set_extension("bapple")
