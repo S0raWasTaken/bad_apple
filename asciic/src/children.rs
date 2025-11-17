@@ -1,7 +1,7 @@
 use std::{
     num::ParseFloatError,
     path::Path,
-    process::{Command, Stdio},
+    process::Command,
     str::from_utf8,
     sync::atomic::{AtomicBool, Ordering::SeqCst},
 };
@@ -11,20 +11,13 @@ use crate::Res;
 pub static FFMPEG_RUNNING: AtomicBool = AtomicBool::new(false);
 
 pub fn ffmpeg(ffmpeg_path: &Path, args: &[&str]) -> Res<()> {
-    let mut command = Command::new(ffmpeg_path);
-    command
-        .args(args)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-
     FFMPEG_RUNNING.store(true, SeqCst);
 
-    let output = command.output();
+    let status = Command::new(ffmpeg_path).args(args).status();
 
     FFMPEG_RUNNING.store(false, SeqCst);
 
-    if !output?.status.success() {
+    if !status?.success() {
         return Err("FFMPEG failed to run".into());
     }
 
@@ -63,11 +56,6 @@ pub fn ffprobe(ffprobe_path: &Path, video_path: &str) -> Res<(u64, u64)> {
 }
 
 pub fn yt_dlp(ytdlp_path: &Path, url: &str, output: &str) -> Res<()> {
-    Command::new(ytdlp_path)
-        .args(["-t", "mp4", "-o", output, url])
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .output()?;
+    Command::new(ytdlp_path).args(["-t", "mp4", "-o", output, url]).status()?;
     Ok(())
 }
