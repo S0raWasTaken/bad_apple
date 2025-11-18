@@ -54,7 +54,7 @@ fn cleanup(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
     while FFMPEG_RUNNING.load(SeqCst) {
         if start.elapsed() > timeout {
             eprintln!(
-                "{RED}Warning: ffmpeg did not finish within timeout, proceeding with cleanup"
+                "{RED}Warning: ffmpeg did not finish within timeout, proceeding with cleanup{RESET}"
             );
             break;
         }
