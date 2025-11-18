@@ -1,0 +1,3 @@
+# As all things should be.
+max_width = 80
+use_small_heuristics = "max"

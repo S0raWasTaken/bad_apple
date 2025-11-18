@@ -2,13 +2,12 @@
 // How fun.
 
 use std::{
-    error::Error,
     fs::{self, create_dir_all},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
-use tokio::runtime::Runtime;
+use crate::Res;
 
 #[cfg(target_os = "linux")]
 const URLS: [&str; 3] = [
@@ -24,8 +23,22 @@ const URLS: [&str; 3] = [
     "https://github.com/S0raWasTaken/bapple_mirror/releases/download/latest/yt-dlp.exe",
 ];
 
+pub struct Dependencies {
+    pub ffmpeg: PathBuf,
+    pub ffprobe: PathBuf,
+    pub ytdlp: PathBuf,
+}
+
+impl Dependencies {
+    pub fn setup() -> Res<Self> {
+        let (ffmpeg, ffprobe) = setup_ffmpeg()?;
+        let ytdlp = setup_ytdlp()?;
+        Ok(Self { ffmpeg, ffprobe, ytdlp })
+    }
+}
+
 // and ffprobe too
-pub fn setup_ffmpeg(rt: &Runtime) -> Result<(PathBuf, PathBuf), Box<dyn Error>> {
+fn setup_ffmpeg() -> Res<(PathBuf, PathBuf)> {
     let data_dir = local_data_dir()?;
     create_dir_all(&data_dir)?;
 
@@ -34,11 +47,11 @@ pub fn setup_ffmpeg(rt: &Runtime) -> Result<(PathBuf, PathBuf), Box<dyn Error>> 
 
     if !ffmpeg_output.exists() {
         println!("Downloading FFmpeg binary...");
-        rt.block_on(download_binary(URLS[0], &ffmpeg_output))?;
+        download_binary(URLS[0], &ffmpeg_output)?;
     }
     if !ffprobe_output.exists() {
         println!("Downloading FFprobe...");
-        rt.block_on(download_binary(URLS[1], &ffprobe_output))?;
+        download_binary(URLS[1], &ffprobe_output)?;
     }
 
     #[cfg(unix)]
@@ -50,14 +63,14 @@ pub fn setup_ffmpeg(rt: &Runtime) -> Result<(PathBuf, PathBuf), Box<dyn Error>> 
     Ok((ffmpeg_output, ffprobe_output))
 }
 
-pub fn setup_ytdlp(rt: &Runtime) -> Result<PathBuf, Box<dyn Error>> {
+fn setup_ytdlp() -> Res<PathBuf> {
     let data_dir = local_data_dir()?;
 
     let ytdlp_output = data_dir.join("yt-dlp");
 
     if !ytdlp_output.exists() {
         println!("Downloading yt-dlp binary...");
-        rt.block_on(download_binary(URLS[2], &ytdlp_output))?;
+        download_binary(URLS[2], &ytdlp_output)?;
     }
     #[cfg(unix)]
     {
@@ -80,15 +93,15 @@ pub fn setup_ytdlp(rt: &Runtime) -> Result<PathBuf, Box<dyn Error>> {
     Ok(ytdlp_output)
 }
 
-async fn download_binary(url: &str, output: &Path) -> Result<(), Box<dyn Error>> {
-    let bytes = reqwest::get(url).await?.bytes().await?;
+fn download_binary(url: &str, output: &Path) -> Res<()> {
+    let bytes = reqwest::blocking::get(url)?.error_for_status()?.bytes()?;
     fs::write(output, bytes)?;
     println!("Success! {}", output.display());
     Ok(())
 }
 
 #[inline]
-fn local_data_dir() -> Result<PathBuf, Box<dyn Error>> {
+fn local_data_dir() -> Res<PathBuf> {
     Ok(user_dirs::data_dir()?.join("asciic-bin"))
 }
 

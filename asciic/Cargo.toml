@@ -6,16 +6,15 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.2.22", features = ["derive", "cargo"] }
+clap = { version = "4.5.51", features = ["derive", "cargo"] }
 ctrlc = { version = "3.2.3", features = ["termination"] }
-image = "0.24.4"
+image = "0.25.9"
 rayon = "1.5.3"
-reqwest = { version = "0.12.24", features = ["rustls-tls"] }
-ron = "0.11.0"
+reqwest = { version = "0.12.24", features = ["rustls-tls", "blocking"] }
+ron = "0.12.0"
 serde = { version = "1.0.228", features = ["derive"] }
 tar = "0.4.38"
 tempfile = "3.3.0"
 term_size = "0.3.2"
-tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread"] }
 user_dirs = "0.2.0"
-zstd = "0.11.2"
+zstd = "0.13.3"
