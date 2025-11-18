@@ -28,7 +28,7 @@ fn main() -> Res<()> {
 
     let mut status_code = 0;
     if let Err(error) = ascii_compiler.compile() {
-        eprintln!("{RED}{error:?}");
+        eprintln!("{RED}{error:?}{RESET}");
         status_code = 1;
     }
 
