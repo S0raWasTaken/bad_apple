@@ -1,25 +1,10 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum, command, crate_version};
+use clap::{Parser, command, crate_version};
 
 use crate::primitives::Input;
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum Style {
-    FgPaint,
-    BgPaint,
-    BgOnly,
-}
-
-impl Style {
-    pub fn ansi(&self) -> u8 {
-        match self {
-            Style::FgPaint => 3,
-            Style::BgPaint => 4,
-            Style::BgOnly => 4,
-        }
-    }
-}
+use libasciic::Style;
 
 #[derive(Parser, Debug)]
 #[command(version(crate_version!()))]

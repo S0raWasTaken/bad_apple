@@ -1,0 +1,20 @@
+[package]
+name = "libasciic"
+version = "0.1.0"
+edition = "2021"
+authors = ["S0ra <S0raWasTaken>"]
+license = "MIT"
+description = "A library for converting images to ASCII art with optional ANSI colorization"
+repository = "https://github.com/S0raWasTaken/bad_apple"
+documentation = "https://docs.rs/libasciic"
+homepage = "https://github.com/S0raWasTaken/bad_apple"
+readme = "README.md"
+keywords = ["ascii", "ascii-art", "image", "terminal", "ansi"]
+categories = ["multimedia::images", "command-line-interface", "rendering"]
+
+[features]
+clap = ["dep:clap"]
+
+[dependencies]
+clap = { version = "4.5.52", features = ["derive"], optional = true }
+image = "0.25.9"
