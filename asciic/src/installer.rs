@@ -94,7 +94,7 @@ fn setup_ytdlp() -> Res<PathBuf> {
 }
 
 fn download_binary(url: &str, output: &Path) -> Res<()> {
-    let bytes = reqwest::blocking::get(url)?.bytes()?;
+    let bytes = reqwest::blocking::get(url)?.error_for_status()?.bytes()?;
     fs::write(output, bytes)?;
     println!("Success! {}", output.display());
     Ok(())
