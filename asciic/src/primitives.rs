@@ -101,8 +101,8 @@ impl AsciiCompiler {
 
         let charset = Charset::mkcharset(&args.charset)?;
 
-        let Some(dimensions) = term_size::dimensions().map(|(w, h)| {
-            (u32::try_from(w).unwrap(), u32::try_from(h).unwrap())
+        let Some(dimensions) = term_size::dimensions().and_then(|(w, h)| {
+            Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?))
         }) else {
             return Err("Could not detect the terminal's window size.".into());
         };
