@@ -146,19 +146,19 @@ impl AsciiCompiler {
         yt_dlp(
             &self.dependencies.ytdlp,
             link,
-            &temporary_video.display().to_string(),
+            &temporary_video.to_string_lossy(),
         )?;
 
         self.make_video(&temporary_video)
     }
 
     fn make_video(&self, video: &Path) -> Res<()> {
-        let video_path = video.to_str().unwrap();
+        let video_path = video.to_string_lossy();
         let (fps, frametime): (u64, u64) =
-            ffprobe(&self.dependencies.ffprobe, video_path)?;
-        self.split_video_frames(video_path)?;
+            ffprobe(&self.dependencies.ffprobe, &video_path)?;
+        self.split_video_frames(&video_path)?;
         if !self.no_audio {
-            self.extract_audio(video_path)?;
+            self.extract_audio(&video_path)?;
         }
 
         let mut tar_archive = Builder::new(File::create(self.output.clone())?);
@@ -315,7 +315,10 @@ impl AsciiCompiler {
             &[
                 "-i",
                 video_path,
-                &format!("{}/audio.mp3", self.temp_dir.path().display()),
+                &format!(
+                    "{}/audio.mp3",
+                    self.temp_dir.path().to_string_lossy()
+                ),
             ],
         )
     }
