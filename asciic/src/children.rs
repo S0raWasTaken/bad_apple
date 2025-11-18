@@ -6,7 +6,10 @@ use std::{
     sync::atomic::{AtomicBool, Ordering::SeqCst},
 };
 
-use crate::Res;
+use crate::{
+    Res,
+    colours::{RED, YELLOW},
+};
 
 pub static FFMPEG_RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -56,6 +59,15 @@ pub fn ffprobe(ffprobe_path: &Path, video_path: &str) -> Res<(u64, u64)> {
 }
 
 pub fn yt_dlp(ytdlp_path: &Path, url: &str, output: &str) -> Res<()> {
-    Command::new(ytdlp_path).args(["-t", "mp4", "-o", output, url]).status()?;
+    let status = Command::new(ytdlp_path)
+        .args(["-t", "mp4", "-o", output, url])
+        .status()?;
+
+    if !status.success() {
+        return Err(format!(
+            "{RED}yt-dlp failed to grab a video from {YELLOW}'{url}'"
+        )
+        .into());
+    }
     Ok(())
 }

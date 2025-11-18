@@ -6,6 +6,7 @@ use std::{
 
 use clap::Parser;
 
+use crate::colours::RESET;
 use crate::{
     children::FFMPEG_RUNNING,
     cli::Args,
@@ -43,7 +44,7 @@ fn register_ctrl_c_handle(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
 }
 
 fn cleanup(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
-    println!("\n{YELLOW}Cleaning up...");
+    println!("\n{YELLOW}Cleaning up...{RESET}");
     let tmp_dir_path = ascii_compiler.temp_dir.path();
 
     // Wait for ffmpeg before removing the directory
