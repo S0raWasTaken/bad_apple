@@ -2,8 +2,8 @@ use std::fmt::Write as FmtWrite;
 use std::fs::{File, read_dir};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::atomic::{AtomicU8, AtomicUsize};
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 use clap::crate_version;
@@ -16,7 +16,7 @@ use tempfile::TempDir;
 use zstd::encode_all;
 
 use crate::children::{ffprobe, yt_dlp};
-use crate::colours::{BOLD, RESET, YELLOW};
+use crate::colours::{BOLD, CYAN, RESET, YELLOW};
 use crate::installer::Dependencies;
 use crate::{
     Res,
@@ -85,7 +85,7 @@ pub struct AsciiCompiler {
     style: Style,
     pub output: PathBuf,
     charset: Charset,
-    threshold: u8,
+    threshold: AtomicU8,
 }
 
 impl AsciiCompiler {
@@ -97,7 +97,7 @@ impl AsciiCompiler {
         let colorize = args.colorize;
         let style = args.style;
         let no_audio = args.no_audio;
-        let threshold = args.threshold;
+        let threshold = AtomicU8::new(args.threshold);
 
         let charset = Charset::mkcharset(&args.charset)?;
 
@@ -107,7 +107,10 @@ impl AsciiCompiler {
             return Err("Could not detect the terminal's window size.".into());
         };
 
-        let dependencies = Dependencies::setup()?;
+        let dependencies = match input {
+            Input::Video(_) | Input::YoutubeLink(_) => Dependencies::setup()?,
+            Input::Image(_) => Dependencies::default(),
+        };
 
         Ok(Self {
             stop_handle,
@@ -183,7 +186,10 @@ impl AsciiCompiler {
                 }
                 let now = processed.fetch_add(1, Relaxed);
 
-                print!("\rProcessing: {}% {now}/{total}", (100 * now) / total);
+                print!(
+                    "\r{CYAN}Processing: {}% {now}/{total}{RESET}",
+                    (100 * now) / total
+                );
                 let uncompressed_frame: String = self.make_frame(&entry)?;
                 Ok((
                     entry.clone(),
@@ -197,7 +203,7 @@ impl AsciiCompiler {
         for (path, compressed_frame) in frames {
             processed += 1;
             print!(
-                "\rLinking: {}% {processed}/{total}",
+                "\r{CYAN}Linking: {}% {processed}/{total}{RESET}",
                 (100 * processed) / total
             );
 
@@ -237,6 +243,8 @@ impl AsciiCompiler {
         let mut frame = String::new();
         let mut last_colorized_pixel = resized_image.get_pixel(0, 0).0;
 
+        let threshold = self.threshold.load(Relaxed);
+
         for y in 0..self.dimensions.1 {
             for x in 0..self.dimensions.0 {
                 let current_pixel = resized_image.get_pixel(x, y).0;
@@ -259,7 +267,7 @@ impl AsciiCompiler {
                     last_colorized_pixel,
                 );
 
-                if max_colour_diff > self.threshold || x == 0 {
+                if max_colour_diff > threshold {
                     write!(
                         frame,
                         "\x1b[{}8;2;{r};{g};{b}m{char}",
@@ -281,6 +289,7 @@ impl AsciiCompiler {
 
     #[inline]
     fn make_image(&self, image: &PathBuf) -> Res<()> {
+        self.threshold.store(0, Relaxed);
         File::create(self.output.clone())?
             .write_all(self.make_frame(image)?.as_bytes())?;
         Ok(())

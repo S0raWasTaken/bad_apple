@@ -23,6 +23,7 @@ const URLS: [&str; 3] = [
     "https://github.com/S0raWasTaken/bapple_mirror/releases/download/latest/yt-dlp.exe",
 ];
 
+#[derive(Default)] // To skip dependency setup
 pub struct Dependencies {
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
