@@ -1,5 +1,5 @@
 use std::fmt::Write as FmtWrite;
-use std::fs::{File, read_dir};
+use std::fs::{File, read_dir, remove_file};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::AtomicUsize;
@@ -149,7 +149,10 @@ impl AsciiCompiler {
             &temporary_video.to_string_lossy(),
         )?;
 
-        self.make_video(&temporary_video)
+        self.make_video(&temporary_video)?;
+
+        remove_file(temporary_video)?;
+        Ok(())
     }
 
     fn make_video(&self, video: &Path) -> Res<()> {
