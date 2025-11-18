@@ -49,9 +49,9 @@ impl Charset {
     pub fn match_char(&self, brightness: u8) -> char {
         self.0
             .iter()
-            .zip(self.1.clone())
+            .zip(self.1.iter())
             .find(|(threshold, _)| brightness <= **threshold)
-            .map_or(self.2, |(_, c)| c)
+            .map_or(self.2, |(_, c)| *c)
     }
 
     fn mkcharset(spec: &str) -> Res<Self> {
