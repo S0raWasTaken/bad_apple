@@ -80,14 +80,16 @@ impl Args {
             return (input, output);
         }
 
-        let output = match input.clone() {
-            Input::Image(mut image_path) => {
-                image_path.set_extension("txt");
-                image_path.clone()
+        let output = match &input {
+            Input::Image(image_path) => {
+                let mut path = image_path.clone();
+                path.set_extension("txt");
+                path
             }
-            Input::Video(mut video_path) => {
-                video_path.set_extension("bapple");
-                video_path.clone()
+            Input::Video(video_path) => {
+                let mut path = video_path.clone();
+                path.set_extension("bapple");
+                path
             }
             Input::YoutubeLink(_) => unreachable!(),
         };

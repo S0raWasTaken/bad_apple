@@ -1,3 +1,4 @@
+use std::fs::remove_file;
 use std::process::exit;
 use std::sync::atomic::Ordering::SeqCst;
 use std::{
@@ -62,5 +63,12 @@ fn cleanup(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
     }
 
     remove_dir_all(tmp_dir_path)?;
+
+    if let primitives::Input::YoutubeLink(_) = ascii_compiler.input {
+        let mut temporary_video = ascii_compiler.output.clone();
+        temporary_video.set_extension("mp4");
+
+        remove_file(temporary_video)?;
+    }
     Ok(())
 }

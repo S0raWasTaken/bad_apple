@@ -1,5 +1,5 @@
 use std::fmt::Write as FmtWrite;
-use std::fs::{File, read_dir, remove_file};
+use std::fs::{File, read_dir};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::AtomicUsize;
@@ -79,11 +79,11 @@ pub struct AsciiCompiler {
     dependencies: Dependencies,
 
     // Set by args from now on ↓
-    input: Input,
+    pub input: Input,
     colorize: bool,
     no_audio: bool,
     style: Style,
-    output: PathBuf,
+    pub output: PathBuf,
     charset: Charset,
     threshold: u8,
 }
@@ -149,10 +149,7 @@ impl AsciiCompiler {
             &temporary_video.to_string_lossy(),
         )?;
 
-        self.make_video(&temporary_video)?;
-
-        remove_file(temporary_video)?;
-        Ok(())
+        self.make_video(&temporary_video)
     }
 
     fn make_video(&self, video: &Path) -> Res<()> {
@@ -306,7 +303,7 @@ impl AsciiCompiler {
                 video_path,
                 "-r",
                 "1",
-                &format!("{}/%03d.png", self.temp_dir.path().to_str().unwrap()),
+                &format!("{}/%03d.png", self.temp_dir.path().to_string_lossy()),
             ],
         )
     }
