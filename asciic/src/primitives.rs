@@ -163,12 +163,11 @@ impl AsciiCompiler {
 
                 // Early fail: filename must be a number
                 {
-                    let stem = entry
+                    let _: u64 = entry
                         .file_stem()
                         .and_then(|s| s.to_str())
+                        .and_then(|stem| stem.parse().ok())
                         .ok_or(FILE_STEM_NAN)?;
-
-                    let _: u64 = stem.parse()?;
                 }
 
                 print!(
