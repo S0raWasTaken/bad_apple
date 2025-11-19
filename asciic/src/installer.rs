@@ -7,7 +7,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use crate::Res;
+use crate::{Res, primitives::Input};
 
 #[cfg(target_os = "linux")]
 const URLS: [&str; 3] = [
@@ -31,10 +31,19 @@ pub struct Dependencies {
 }
 
 impl Dependencies {
-    pub fn setup() -> Res<Self> {
-        let (ffmpeg, ffprobe) = setup_ffmpeg()?;
-        let ytdlp = setup_ytdlp()?;
-        Ok(Self { ffmpeg, ffprobe, ytdlp })
+    pub fn setup(input: &Input) -> Res<Self> {
+        match input {
+            Input::Video(_) => {
+                let (ffmpeg, ffprobe) = setup_ffmpeg()?;
+                Ok(Self { ffmpeg, ffprobe, ..Default::default() })
+            }
+            Input::Image(_) => Ok(Self::default()),
+            Input::YoutubeLink(_) => {
+                let (ffmpeg, ffprobe) = setup_ffmpeg()?;
+                let ytdlp = setup_ytdlp()?;
+                Ok(Self { ffmpeg, ffprobe, ytdlp })
+            }
+        }
     }
 }
 

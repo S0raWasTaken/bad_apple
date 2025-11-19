@@ -74,10 +74,7 @@ impl AsciiCompiler {
             return Err("Could not detect the terminal's window size.".into());
         };
 
-        let dependencies = match input {
-            Input::Video(_) | Input::YoutubeLink(_) => Dependencies::setup()?,
-            Input::Image(_) => Dependencies::default(),
-        };
+        let dependencies = Dependencies::setup(&input)?;
 
         let filter_type = args.filter_type.into();
 
