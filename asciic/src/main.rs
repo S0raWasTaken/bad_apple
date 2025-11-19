@@ -44,7 +44,7 @@ fn register_ctrl_c_handle(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
     Ok(())
 }
 
-fn cleanup(ascii_compiler: &Arc<AsciiCompiler>) -> Res<()> {
+fn cleanup(ascii_compiler: &AsciiCompiler) -> Res<()> {
     println!("\n{YELLOW}Cleaning up...{RESET}");
     let tmp_dir_path = ascii_compiler.temp_dir.path();
 
