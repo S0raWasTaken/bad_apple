@@ -120,7 +120,7 @@ fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         return Err(
-            "Automatic dependency management is unsupported for this OS",
+            "Automatic dependency management is unsupported for this OS".into(),
         );
     }
 
