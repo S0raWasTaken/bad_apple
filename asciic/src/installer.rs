@@ -4,10 +4,15 @@
 use std::{
     fs::{self, create_dir_all},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
 };
 
-use crate::{Res, primitives::Input};
+use crate::{
+    Res,
+    colours::{LIGHT_GREEN, RED, RESET},
+    primitives::Input,
+};
+use which::which;
 
 #[cfg(target_os = "linux")]
 const URLS: [&str; 3] = [
@@ -23,6 +28,9 @@ const URLS: [&str; 3] = [
     "https://github.com/S0raWasTaken/bapple_mirror/releases/download/latest/yt-dlp.exe",
 ];
 
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+const URLS: [&str; 3] = [""; 3];
+
 #[derive(Default)] // To skip dependency setup
 pub struct Dependencies {
     pub ffmpeg: PathBuf,
@@ -31,16 +39,27 @@ pub struct Dependencies {
 }
 
 impl Dependencies {
-    pub fn setup(input: &Input) -> Res<Self> {
+    #[allow(unused_mut)] // Used on any OS that's not linux or windows.
+    pub fn setup(input: &Input, mut use_system_binaries: bool) -> Res<Self> {
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        {
+            if !use_system_binaries {
+                eprintln!(
+                    "{RED}Automatically setting the flag --use-system-binaries{RESET}"
+                );
+                use_system_binaries = true;
+            }
+        }
+
         match input {
             Input::Video(_) => {
-                let (ffmpeg, ffprobe) = setup_ffmpeg()?;
+                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_binaries)?;
                 Ok(Self { ffmpeg, ffprobe, ..Default::default() })
             }
             Input::Image(_) => Ok(Self::default()),
             Input::YoutubeLink(_) => {
-                let (ffmpeg, ffprobe) = setup_ffmpeg()?;
-                let ytdlp = setup_ytdlp()?;
+                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_binaries)?;
+                let ytdlp = setup_ytdlp(use_system_binaries)?;
                 Ok(Self { ffmpeg, ffprobe, ytdlp })
             }
         }
@@ -48,65 +67,94 @@ impl Dependencies {
 }
 
 // and ffprobe too
-fn setup_ffmpeg() -> Res<(PathBuf, PathBuf)> {
+fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
+    let mut system_ffmpeg = None;
+    let mut system_ffprobe = None;
+
+    if use_system_binaries {
+        system_ffmpeg = find_system_binary("ffmpeg");
+        system_ffprobe = find_system_binary("ffprobe");
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        if system_ffmpeg.is_none() {
+            return Err("ffmpeg not found in PATH.\n\
+                Automatic dependency management is unsupported for this OS"
+                .into());
+        }
+
+        if system_ffprobe.is_none() {
+            return Err("ffprobe not found in PATH.\n\
+                Automatic dependency management is unsupported for this OS"
+                .into());
+        }
+    }
+
     let data_dir = local_data_dir()?;
     create_dir_all(&data_dir)?;
 
     let ffmpeg_output = data_dir.join("ffmpeg");
     let ffprobe_output = data_dir.join("ffprobe");
 
-    if !ffmpeg_output.exists() {
-        println!("Downloading FFmpeg binary...");
-        download_binary(URLS[0], &ffmpeg_output)?;
+    if !ffmpeg_output.exists() && system_ffmpeg.is_none() {
+        download_and_setup_binary(URLS[0], &ffmpeg_output)?;
     }
-    if !ffprobe_output.exists() {
-        println!("Downloading FFprobe...");
-        download_binary(URLS[1], &ffprobe_output)?;
+    if !ffprobe_output.exists() && system_ffprobe.is_none() {
+        download_and_setup_binary(URLS[1], &ffprobe_output)?;
     }
 
-    #[cfg(unix)]
-    {
-        fix_perms(&ffmpeg_output)?;
-        fix_perms(&ffprobe_output)?;
-    }
-
-    Ok((ffmpeg_output, ffprobe_output))
+    Ok((
+        system_ffmpeg.unwrap_or(ffmpeg_output),
+        system_ffprobe.unwrap_or(ffprobe_output),
+    ))
 }
 
-fn setup_ytdlp() -> Res<PathBuf> {
-    let data_dir = local_data_dir()?;
-
-    let ytdlp_output = data_dir.join("yt-dlp");
-
-    if !ytdlp_output.exists() {
-        println!("Downloading yt-dlp binary...");
-        download_binary(URLS[2], &ytdlp_output)?;
+fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
+    if use_system_binaries && let Some(ytdlp) = find_system_binary("yt-dlp") {
+        return Ok(ytdlp);
     }
-    #[cfg(unix)]
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
-        fix_perms(&ytdlp_output)?;
+        return Err("yt-dlp not found in PATH\n\
+            Automatic dependency management is unsupported for this OS"
+            .into());
     }
 
-    println!("Checking for yt-dlp updates...");
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    {
+        let data_dir = local_data_dir()?;
 
-    let output = Command::new(&ytdlp_output)
-        .arg("-U")
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .output()?;
+        let ytdlp_output = data_dir.join("yt-dlp");
 
-    if !output.status.success() {
-        eprintln!("yt-dlp update check failed");
+        if !ytdlp_output.exists() {
+            download_and_setup_binary(URLS[2], &ytdlp_output)?;
+        }
+
+        println!("Checking for yt-dlp updates...");
+
+        let status = Command::new(&ytdlp_output).arg("-U").status()?;
+
+        if !status.success() {
+            eprintln!("yt-dlp update check failed");
+        }
+
+        Ok(ytdlp_output)
     }
-
-    Ok(ytdlp_output)
 }
 
-fn download_binary(url: &str, output: &Path) -> Res<()> {
+fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
+    println!("Downloading {} binary...", output.file_stem().unwrap().display());
     let bytes = reqwest::blocking::get(url)?.error_for_status()?.bytes()?;
     fs::write(output, bytes)?;
     println!("Success! {}", output.display());
+
+    #[cfg(unix)]
+    {
+        fix_perms(output)?;
+    }
+
     Ok(())
 }
 
@@ -124,4 +172,23 @@ fn fix_perms(file: &Path) -> Result<(), std::io::Error> {
     fs::set_permissions(file, perms)?;
     println!("Set executable permissions for {}", file.display());
     Ok(())
+}
+
+#[inline]
+fn find_system_binary(name: &str) -> Option<PathBuf> {
+    if let Ok(path) = which(name) {
+        println!(
+            "{LIGHT_GREEN}Using system {name} binary at {}{RESET}",
+            path.display()
+        );
+        Some(path)
+    } else {
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        eprintln!(
+            "{RED}{name} not found in PATH; falling back to bundled download.{RESET}"
+        );
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        eprintln!("{RED}{name} not found in PATH.{RESET}");
+        None
+    }
 }

@@ -38,6 +38,10 @@ pub struct Args {
     #[arg(short, long)]
     pub no_audio: bool,
 
+    /// Use ffmpeg, ffprobe and yt-dlp from the system PATH when available
+    #[arg(long)]
+    pub use_system_binaries: bool,
+
     /// Path to a valid video file
     #[arg(group = "input")]
     pub video: Option<PathBuf>,

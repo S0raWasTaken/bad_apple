@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 use std::fs::remove_file;
 use std::process::exit;
 use std::sync::atomic::Ordering::SeqCst;
@@ -33,7 +35,7 @@ fn main() -> Res<()> {
         status_code = 1;
     }
 
-    cleanup(ascii_compiler)?;
+    cleanup(&ascii_compiler)?;
     exit(status_code);
 }
 
@@ -44,7 +46,7 @@ fn register_ctrl_c_handle(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
     Ok(())
 }
 
-fn cleanup(ascii_compiler: Arc<AsciiCompiler>) -> Res<()> {
+fn cleanup(ascii_compiler: &AsciiCompiler) -> Res<()> {
     println!("\n{YELLOW}Cleaning up...{RESET}");
     let tmp_dir_path = ascii_compiler.temp_dir.path();
 
