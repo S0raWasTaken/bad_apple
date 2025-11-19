@@ -4,7 +4,7 @@
 use std::{
     fs::{self, create_dir_all},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
 };
 
 use crate::{
@@ -134,14 +134,9 @@ fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
 
         println!("Checking for yt-dlp updates...");
 
-        let output = Command::new(&ytdlp_output)
-            .arg("-U")
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .output()?;
+        let status = Command::new(&ytdlp_output).arg("-U").status()?;
 
-        if !output.status.success() {
+        if !status.success() {
             eprintln!("yt-dlp update check failed");
         }
 
