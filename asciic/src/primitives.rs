@@ -1,4 +1,3 @@
-use std::fmt::Write as FmtWrite;
 use std::fs::{File, read_dir};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -7,7 +6,7 @@ use std::sync::atomic::{AtomicU8, AtomicUsize};
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 use clap::crate_version;
-use image::{GenericImageView, ImageReader, imageops::FilterType::Nearest};
+use libasciic::{AsciiBuilder, FilterType, Style};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use ron::ser::PrettyConfig;
 use serde::Serialize;
@@ -18,11 +17,7 @@ use zstd::encode_all;
 use crate::children::{ffprobe, yt_dlp};
 use crate::colours::{BOLD, CYAN, RESET, YELLOW};
 use crate::installer::Dependencies;
-use crate::{
-    Res,
-    children::ffmpeg,
-    cli::{Args, Style},
-};
+use crate::{Res, children::ffmpeg, cli::Args};
 
 #[derive(Serialize)]
 pub struct Metadata {
@@ -43,35 +38,6 @@ pub enum Input {
     YoutubeLink(String),
 }
 
-pub struct Charset(pub Vec<u8>, pub Vec<char>, pub char);
-
-impl Charset {
-    pub fn match_char(&self, brightness: u8) -> char {
-        self.0
-            .iter()
-            .zip(self.1.iter())
-            .find(|(threshold, _)| brightness <= **threshold)
-            .map_or(self.2, |(_, c)| *c)
-    }
-
-    fn mkcharset(spec: &str) -> Res<Self> {
-        let mut chars: Vec<char> = spec.chars().collect();
-        chars.insert(0, ' ');
-
-        let steps = chars.len();
-        let mut thresholds = Vec::with_capacity(steps);
-
-        for i in 0..steps {
-            let t =
-                (i as f32 / (steps - 1).max(1) as f32 * 250.0).round() as u8;
-            thresholds.push(t);
-        }
-
-        let last = *chars.last().unwrap();
-        Ok(Self(thresholds, chars, last))
-    }
-}
-
 pub struct AsciiCompiler {
     pub stop_handle: AtomicBool,
     pub temp_dir: TempDir,
@@ -84,8 +50,9 @@ pub struct AsciiCompiler {
     no_audio: bool,
     style: Style,
     pub output: PathBuf,
-    charset: Charset,
+    charset: String,
     threshold: AtomicU8,
+    filter_type: FilterType,
 }
 
 impl AsciiCompiler {
@@ -99,7 +66,7 @@ impl AsciiCompiler {
         let no_audio = args.no_audio;
         let threshold = AtomicU8::new(args.threshold);
 
-        let charset = Charset::mkcharset(&args.charset)?;
+        let charset = args.charset;
 
         let Some(dimensions) = term_size::dimensions().and_then(|(w, h)| {
             Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?))
@@ -107,10 +74,9 @@ impl AsciiCompiler {
             return Err("Could not detect the terminal's window size.".into());
         };
 
-        let dependencies = match input {
-            Input::Video(_) | Input::YoutubeLink(_) => Dependencies::setup()?,
-            Input::Image(_) => Dependencies::default(),
-        };
+        let dependencies = Dependencies::setup(&input)?;
+
+        let filter_type = args.filter_type.into();
 
         Ok(Self {
             stop_handle,
@@ -124,6 +90,7 @@ impl AsciiCompiler {
             output,
             charset,
             threshold,
+            filter_type,
         })
     }
 
@@ -233,58 +200,16 @@ impl AsciiCompiler {
         Ok(())
     }
 
+    #[inline]
     fn make_frame(&self, frame: &PathBuf) -> Res<String> {
-        let resized_image = ImageReader::open(frame)?.decode()?.resize_exact(
-            self.dimensions.0,
-            self.dimensions.1,
-            Nearest,
-        );
-
-        let mut frame = String::new();
-        let mut last_colorized_pixel = resized_image.get_pixel(0, 0).0;
-
-        let threshold = self.threshold.load(Relaxed);
-
-        for y in 0..self.dimensions.1 {
-            for x in 0..self.dimensions.0 {
-                let current_pixel = resized_image.get_pixel(x, y).0;
-                let [r, g, b, _] = current_pixel;
-                let brightness = r.max(g).max(b);
-
-                let char = self.charset.match_char(brightness);
-                if !self.colorize {
-                    frame.push(char);
-                    continue;
-                }
-
-                let char = match self.style {
-                    Style::BgPaint | Style::FgPaint => char,
-                    Style::BgOnly => ' ',
-                };
-
-                let max_colour_diff = Self::get_max_colour_diff(
-                    current_pixel,
-                    last_colorized_pixel,
-                );
-
-                if max_colour_diff > threshold {
-                    write!(
-                        frame,
-                        "\x1b[{}8;2;{r};{g};{b}m{char}",
-                        self.style.ansi()
-                    )?;
-                    last_colorized_pixel = current_pixel;
-                } else {
-                    frame.push(char)
-                }
-            }
-            if self.colorize {
-                frame.push_str(&format!("{RESET}\n"));
-            } else {
-                frame.push('\n');
-            }
-        }
-        Ok(frame)
+        AsciiBuilder::new(File::open(frame)?)?
+            .dimensions(self.dimensions.0, self.dimensions.1)
+            .charset(&self.charset)?
+            .style(self.style)
+            .colorize(self.colorize)
+            .filter_type(self.filter_type)
+            .threshold(self.threshold.load(Relaxed))
+            .make_ascii()
     }
 
     #[inline]
@@ -293,12 +218,6 @@ impl AsciiCompiler {
         File::create(self.output.clone())?
             .write_all(self.make_frame(image)?.as_bytes())?;
         Ok(())
-    }
-    #[inline]
-    fn get_max_colour_diff(pixel_a: [u8; 4], pixel_b: [u8; 4]) -> u8 {
-        let [r1, g1, b1, _] = pixel_a;
-        let [r2, g2, b2, _] = pixel_b;
-        r1.abs_diff(r2).max(g1.abs_diff(g2)).max(b1.abs_diff(b2))
     }
 
     #[inline]

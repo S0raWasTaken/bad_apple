@@ -3,7 +3,8 @@ resolver = "3"
 members = [
 	"asciic",
 	"asciild",
-	"bplay"
+	"bplay", 
+	"libasciic"
 ]
 
 [profile.dev]

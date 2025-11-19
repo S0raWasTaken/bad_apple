@@ -4,19 +4,25 @@ use clap::{Parser, ValueEnum, command, crate_version};
 
 use crate::primitives::Input;
 
+use libasciic::Style;
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum Style {
-    FgPaint,
-    BgPaint,
-    BgOnly,
+pub enum FilterType {
+    Nearest,
+    Triangle,
+    CatmullRom,
+    Gaussian,
+    Lanczos3,
 }
 
-impl Style {
-    pub fn ansi(&self) -> u8 {
-        match self {
-            Style::FgPaint => 3,
-            Style::BgPaint => 4,
-            Style::BgOnly => 4,
+impl From<FilterType> for libasciic::FilterType {
+    fn from(filter_type: FilterType) -> Self {
+        match filter_type {
+            FilterType::Nearest => libasciic::FilterType::Nearest,
+            FilterType::Triangle => libasciic::FilterType::Triangle,
+            FilterType::CatmullRom => libasciic::FilterType::CatmullRom,
+            FilterType::Gaussian => libasciic::FilterType::Gaussian,
+            FilterType::Lanczos3 => libasciic::FilterType::Lanczos3,
         }
     }
 }
@@ -62,8 +68,13 @@ pub struct Args {
     #[arg(short, long, default_value = "3")]
     pub threshold: u8,
 
-    #[arg(long, default_value = " .:-+=#@")]
+    /// Custom charset for the output.
+    #[arg(long, default_value = ".:-+=#@")]
     pub charset: String,
+
+    /// Set a custom filter type for image resizing.
+    #[arg(short, long, default_value = "nearest")]
+    pub filter_type: FilterType,
 }
 
 impl Args {
