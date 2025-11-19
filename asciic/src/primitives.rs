@@ -6,8 +6,7 @@ use std::sync::atomic::{AtomicU8, AtomicUsize};
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 use clap::crate_version;
-use libasciic::FilterType::Nearest;
-use libasciic::{AsciiBuilder, Style};
+use libasciic::{AsciiBuilder, FilterType, Style};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use ron::ser::PrettyConfig;
 use serde::Serialize;
@@ -53,6 +52,7 @@ pub struct AsciiCompiler {
     pub output: PathBuf,
     charset: String,
     threshold: AtomicU8,
+    filter_type: FilterType,
 }
 
 impl AsciiCompiler {
@@ -79,6 +79,8 @@ impl AsciiCompiler {
             Input::Image(_) => Dependencies::default(),
         };
 
+        let filter_type = args.filter_type.into();
+
         Ok(Self {
             stop_handle,
             temp_dir,
@@ -91,6 +93,7 @@ impl AsciiCompiler {
             output,
             charset,
             threshold,
+            filter_type,
         })
     }
 
@@ -207,7 +210,7 @@ impl AsciiCompiler {
             .charset(&self.charset)?
             .style(self.style)
             .colorize(self.colorize)
-            .filter_type(Nearest)
+            .filter_type(self.filter_type)
             .threshold(self.threshold.load(Relaxed))
             .make_ascii()
     }

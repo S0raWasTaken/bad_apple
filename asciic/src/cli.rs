@@ -1,10 +1,31 @@
 use std::path::PathBuf;
 
-use clap::{Parser, command, crate_version};
+use clap::{Parser, ValueEnum, command, crate_version};
 
 use crate::primitives::Input;
 
 use libasciic::Style;
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum FilterType {
+    Nearest,
+    Triangle,
+    CatmullRom,
+    Gaussian,
+    Lanczos3,
+}
+
+impl From<FilterType> for libasciic::FilterType {
+    fn from(filter_type: FilterType) -> Self {
+        match filter_type {
+            FilterType::Nearest => libasciic::FilterType::Nearest,
+            FilterType::Triangle => libasciic::FilterType::Triangle,
+            FilterType::CatmullRom => libasciic::FilterType::CatmullRom,
+            FilterType::Gaussian => libasciic::FilterType::Gaussian,
+            FilterType::Lanczos3 => libasciic::FilterType::Lanczos3,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(version(crate_version!()))]
@@ -47,8 +68,12 @@ pub struct Args {
     #[arg(short, long, default_value = "3")]
     pub threshold: u8,
 
+    /// Custom charset for the output.
     #[arg(long, default_value = ".:-+=#@")]
     pub charset: String,
+
+    /// Set a custom filter type for image resizing.
+    pub filter_type: FilterType,
 }
 
 impl Args {
