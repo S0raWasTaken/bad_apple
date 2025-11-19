@@ -21,7 +21,7 @@
 //!     .make_ascii()?;
 //!
 //! println!("{}", ascii);
-//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
 //! ```
 
 use std::{
@@ -106,7 +106,7 @@ impl Charset {
     /// ```no_run
     /// # use libasciic::Charset;
     /// let charset = Charset::mkcharset(".:-+=#@")?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
     /// ```
     ///
     /// # Returns
@@ -154,7 +154,7 @@ impl Charset {
 ///     .charset(".:;+=xX$@")?
 ///     .filter_type(FilterType::Lanczos3)
 ///     .make_ascii()?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
 /// ```
 pub struct AsciiBuilder<R: Read + Seek> {
     image: BufReader<R>,
@@ -198,6 +198,10 @@ impl<R: Read + Seek> AsciiBuilder<R> {
         })
     }
 
+    const DIMENSIONS_ZERO_ERR: &str = "\
+    Please, set both dimensions to a non-zero value \
+    before running AsciiBuilder::make_ascii()";
+
     /// Generates the ASCII art string from the configured image.
     ///
     /// Decodes the image, resizes it to the specified dimensions, and converts
@@ -216,10 +220,8 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// - Image decoding fails
     /// - String formatting fails
     pub fn make_ascii(self) -> Res<String> {
-        if self.dimensions == (0, 0) {
-            return Err(
-                "Please, set the dimensions for the generated image.".into()
-            );
+        if self.dimensions.0 == 0 || self.dimensions.1 == 0 {
+            return Err(Self::DIMENSIONS_ZERO_ERR.into());
         }
 
         let resized_image = ImageReader::new(self.image)
@@ -358,7 +360,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// # let file = File::open("image.png")?;
     /// let builder = AsciiBuilder::new(file)?
     ///     .charset(".'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$")?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
     /// ```
     #[inline]
     pub fn charset(mut self, charset: &str) -> Res<Self> {

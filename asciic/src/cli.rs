@@ -47,7 +47,7 @@ pub struct Args {
     #[arg(short, long, default_value = "3")]
     pub threshold: u8,
 
-    #[arg(long, default_value = " .:-+=#@")]
+    #[arg(long, default_value = ".:-+=#@")]
     pub charset: String,
 }
 
