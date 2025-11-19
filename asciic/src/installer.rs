@@ -7,7 +7,11 @@ use std::{
     process::{Command, Stdio},
 };
 
-use crate::{Res, primitives::Input};
+use crate::{
+    Res,
+    colours::{LIGHT_GREEN, RED, RESET},
+    primitives::Input,
+};
 use which::which;
 
 #[cfg(target_os = "linux")]
@@ -32,16 +36,16 @@ pub struct Dependencies {
 }
 
 impl Dependencies {
-    pub fn setup(input: &Input, use_system_ffmpeg: bool) -> Res<Self> {
+    pub fn setup(input: &Input, use_system_binaries: bool) -> Res<Self> {
         match input {
             Input::Video(_) => {
-                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_ffmpeg)?;
+                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_binaries)?;
                 Ok(Self { ffmpeg, ffprobe, ..Default::default() })
             }
             Input::Image(_) => Ok(Self::default()),
             Input::YoutubeLink(_) => {
-                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_ffmpeg)?;
-                let ytdlp = setup_ytdlp()?;
+                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_binaries)?;
+                let ytdlp = setup_ytdlp(use_system_binaries)?;
                 Ok(Self { ffmpeg, ffprobe, ytdlp })
             }
         }
@@ -49,32 +53,12 @@ impl Dependencies {
 }
 
 // and ffprobe too
-fn setup_ffmpeg(use_system_ffmpeg: bool) -> Res<(PathBuf, PathBuf)> {
-    if use_system_ffmpeg {
-        let ffmpeg_in_path = which("ffmpeg");
-        let ffprobe_in_path = which("ffprobe");
-
-        if let (Ok(ffmpeg_path), Ok(ffprobe_path)) =
-            (ffmpeg_in_path.as_ref(), ffprobe_in_path.as_ref())
-        {
-            println!(
-                "Using system FFmpeg binaries at {} and {}",
-                ffmpeg_path.display(),
-                ffprobe_path.display()
-            );
-            return Ok((ffmpeg_path.clone(), ffprobe_path.clone()));
-        }
-
-        if let Err(err) = ffmpeg_in_path {
-            eprintln!(
-                "ffmpeg not found in PATH ({err}); falling back to bundled download."
-            );
-        }
-        if let Err(err) = ffprobe_in_path {
-            eprintln!(
-                "ffprobe not found in PATH ({err}); falling back to bundled download."
-            );
-        }
+fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
+    if use_system_binaries
+        && let (Some(ffmpeg), Some(ffprobe)) =
+            (find_system_binary("ffmpeg"), find_system_binary("ffprobe"))
+    {
+        return Ok((ffmpeg, ffprobe));
     }
 
     let data_dir = local_data_dir()?;
@@ -101,7 +85,11 @@ fn setup_ffmpeg(use_system_ffmpeg: bool) -> Res<(PathBuf, PathBuf)> {
     Ok((ffmpeg_output, ffprobe_output))
 }
 
-fn setup_ytdlp() -> Res<PathBuf> {
+fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
+    if use_system_binaries && let Some(ytdlp) = find_system_binary("yt-dlp") {
+        return Ok(ytdlp);
+    }
+
     let data_dir = local_data_dir()?;
 
     let ytdlp_output = data_dir.join("yt-dlp");
@@ -152,4 +140,23 @@ fn fix_perms(file: &Path) -> Result<(), std::io::Error> {
     fs::set_permissions(file, perms)?;
     println!("Set executable permissions for {}", file.display());
     Ok(())
+}
+
+#[inline]
+fn find_system_binary(name: &str) -> Option<PathBuf> {
+    match which(name) {
+        Ok(path) => {
+            println!(
+                "{LIGHT_GREEN}Using system {name} binary at {}{RESET}",
+                path.display()
+            );
+            Some(path)
+        }
+        Err(_) => {
+            eprintln!(
+                "{RED}{name} not found in PATH; falling back to bundled download.{RESET}"
+            );
+            None
+        }
+    }
 }
