@@ -188,9 +188,12 @@ fn find_system_binary(name: &str) -> Option<PathBuf> {
         );
         Some(path)
     } else {
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         eprintln!(
             "{RED}{name} not found in PATH; falling back to bundled download.{RESET}"
         );
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        eprintln!("{RED}{name} not found in PATH.{RESET}");
         None
     }
 }
