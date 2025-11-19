@@ -260,7 +260,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
                 if should_colorize {
                     write!(
                         frame,
-                        "\x1b[{};8;2;{r};{g};{b}m{char}",
+                        "\x1b[{}8;2;{r};{g};{b}m{char}",
                         self.style.ansi()
                     )?;
                     last_colorized_pixel = current_pixel;
