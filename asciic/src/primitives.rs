@@ -38,6 +38,14 @@ pub enum Input {
     YoutubeLink(String),
 }
 
+const FILE_STEM_NAN: &str = "\x1b[31m\
+Frame processing failed.
+One of the file stems was not a valid number.
+This might be an FFMPEG related issue.
+If you ever see this message, please open an \
+issue in https://github.com/S0raWasTaken/bad_apple \
+\x1b[0m";
+
 pub struct AsciiCompiler {
     pub stop_handle: AtomicBool,
     pub temp_dir: TempDir,
@@ -146,13 +154,22 @@ impl AsciiCompiler {
 
         // The compiler wanted to end its own life, so I'm giving
         // this variable an explicit type.
-        let frames: Vec<(PathBuf, Vec<u8>)> = frames
+        let mut frames: Vec<(PathBuf, Vec<u8>)> = frames
             .into_par_iter()
             .map(|entry| -> Res<(PathBuf, Vec<u8>)> {
                 if self.stop_handle.load(Relaxed) {
                     return Err("Stopped.".into());
                 }
                 let now = processed.fetch_add(1, Relaxed);
+
+                // Early fail: filename must be a number
+                {
+                    let _: u64 = entry
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .and_then(|stem| stem.parse().ok())
+                        .ok_or(FILE_STEM_NAN)?;
+                }
 
                 print!(
                     "\r{CYAN}Processing: {}% {now}/{total}{RESET}",
@@ -165,6 +182,13 @@ impl AsciiCompiler {
                 ))
             })
             .collect::<Res<_>>()?;
+
+        frames.sort_by_key(|(path, _)| {
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap() // Should've failed early if the file stem is NaN
+        });
 
         let mut processed = 0;
         // Let's write to the tar archive in a single thread, for obvious reasons.
