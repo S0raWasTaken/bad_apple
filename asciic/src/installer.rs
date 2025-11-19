@@ -98,18 +98,10 @@ fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
     let ffprobe_output = data_dir.join("ffprobe");
 
     if !ffmpeg_output.exists() && system_ffmpeg.is_none() {
-        println!("Downloading FFmpeg binary...");
-        download_binary(URLS[0], &ffmpeg_output)?;
-
-        #[cfg(unix)]
-        fix_perms(&ffmpeg_output)?;
+        download_and_setup_binary(URLS[0], &ffmpeg_output)?;
     }
     if !ffprobe_output.exists() && system_ffprobe.is_none() {
-        println!("Downloading FFprobe...");
-        download_binary(URLS[1], &ffprobe_output)?;
-
-        #[cfg(unix)]
-        fix_perms(&ffprobe_output)?;
+        download_and_setup_binary(URLS[1], &ffprobe_output)?;
     }
 
     Ok((
@@ -137,12 +129,7 @@ fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
         let ytdlp_output = data_dir.join("yt-dlp");
 
         if !ytdlp_output.exists() {
-            println!("Downloading yt-dlp binary...");
-            download_binary(URLS[2], &ytdlp_output)?;
-        }
-        #[cfg(unix)]
-        {
-            fix_perms(&ytdlp_output)?;
+            download_and_setup_binary(URLS[2], &ytdlp_output)?;
         }
 
         println!("Checking for yt-dlp updates...");
@@ -162,10 +149,17 @@ fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
     }
 }
 
-fn download_binary(url: &str, output: &Path) -> Res<()> {
+fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
+    println!("Downloading {} binary...", output.file_stem().unwrap().display());
     let bytes = reqwest::blocking::get(url)?.error_for_status()?.bytes()?;
     fs::write(output, bytes)?;
     println!("Success! {}", output.display());
+
+    #[cfg(unix)]
+    {
+        fix_perms(output)?;
+    }
+
     Ok(())
 }
 
