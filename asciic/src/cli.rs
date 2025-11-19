@@ -73,6 +73,7 @@ pub struct Args {
     pub charset: String,
 
     /// Set a custom filter type for image resizing.
+    #[arg(short, long, default_value = "nearest")]
     pub filter_type: FilterType,
 }
 
