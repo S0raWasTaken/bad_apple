@@ -28,6 +28,9 @@ const URLS: [&str; 3] = [
     "https://github.com/S0raWasTaken/bapple_mirror/releases/download/latest/yt-dlp.exe",
 ];
 
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+const URLS: [&str; 3] = [""; 3];
+
 #[derive(Default)] // To skip dependency setup
 pub struct Dependencies {
     pub ffmpeg: PathBuf,
@@ -36,7 +39,18 @@ pub struct Dependencies {
 }
 
 impl Dependencies {
-    pub fn setup(input: &Input, use_system_binaries: bool) -> Res<Self> {
+    #[allow(unused_mut)] // Used on any OS that's not linux or windows.
+    pub fn setup(input: &Input, mut use_system_binaries: bool) -> Res<Self> {
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        {
+            if !use_system_binaries {
+                eprintln!(
+                    "{RED}Automatically setting the flag --use-system-binaries{RESET}"
+                );
+                use_system_binaries = true;
+            }
+        }
+
         match input {
             Input::Video(_) => {
                 let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_binaries)?;
@@ -62,6 +76,15 @@ fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
         system_ffprobe = find_system_binary("ffprobe");
     }
 
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        if system_ffmpeg.is_none() || system_ffprobe.is_none() {
+            return Err(
+                "Automatic dependency management is unsupported for this OS",
+            );
+        }
+    }
+
     let data_dir = local_data_dir()?;
     create_dir_all(&data_dir)?;
 
@@ -71,24 +94,34 @@ fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
     if !ffmpeg_output.exists() && system_ffmpeg.is_none() {
         println!("Downloading FFmpeg binary...");
         download_binary(URLS[0], &ffmpeg_output)?;
+
+        #[cfg(unix)]
+        fix_perms(&ffmpeg_output)?;
     }
     if !ffprobe_output.exists() && system_ffprobe.is_none() {
         println!("Downloading FFprobe...");
         download_binary(URLS[1], &ffprobe_output)?;
-    }
 
-    #[cfg(unix)]
-    {
-        fix_perms(&ffmpeg_output)?;
+        #[cfg(unix)]
         fix_perms(&ffprobe_output)?;
     }
 
-    Ok((ffmpeg_output, ffprobe_output))
+    Ok((
+        system_ffmpeg.unwrap_or(ffmpeg_output),
+        system_ffprobe.unwrap_or(ffprobe_output),
+    ))
 }
 
 fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
     if use_system_binaries && let Some(ytdlp) = find_system_binary("yt-dlp") {
         return Ok(ytdlp);
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        return Err(
+            "Automatic dependency management is unsupported for this OS",
+        );
     }
 
     let data_dir = local_data_dir()?;
