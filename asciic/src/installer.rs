@@ -54,11 +54,12 @@ impl Dependencies {
 
 // and ffprobe too
 fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
-    if use_system_binaries
-        && let (Some(ffmpeg), Some(ffprobe)) =
-            (find_system_binary("ffmpeg"), find_system_binary("ffprobe"))
-    {
-        return Ok((ffmpeg, ffprobe));
+    let mut system_ffmpeg = None;
+    let mut system_ffprobe = None;
+
+    if use_system_binaries {
+        system_ffmpeg = find_system_binary("ffmpeg");
+        system_ffprobe = find_system_binary("ffprobe");
     }
 
     let data_dir = local_data_dir()?;
@@ -67,11 +68,11 @@ fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
     let ffmpeg_output = data_dir.join("ffmpeg");
     let ffprobe_output = data_dir.join("ffprobe");
 
-    if !ffmpeg_output.exists() {
+    if !ffmpeg_output.exists() && system_ffmpeg.is_none() {
         println!("Downloading FFmpeg binary...");
         download_binary(URLS[0], &ffmpeg_output)?;
     }
-    if !ffprobe_output.exists() {
+    if !ffprobe_output.exists() && system_ffprobe.is_none() {
         println!("Downloading FFprobe...");
         download_binary(URLS[1], &ffprobe_output)?;
     }
