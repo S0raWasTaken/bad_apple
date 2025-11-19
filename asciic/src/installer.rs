@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{Res, primitives::Input};
+use which::which;
 
 #[cfg(target_os = "linux")]
 const URLS: [&str; 3] = [
@@ -31,15 +32,15 @@ pub struct Dependencies {
 }
 
 impl Dependencies {
-    pub fn setup(input: &Input) -> Res<Self> {
+    pub fn setup(input: &Input, use_system_ffmpeg: bool) -> Res<Self> {
         match input {
             Input::Video(_) => {
-                let (ffmpeg, ffprobe) = setup_ffmpeg()?;
+                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_ffmpeg)?;
                 Ok(Self { ffmpeg, ffprobe, ..Default::default() })
             }
             Input::Image(_) => Ok(Self::default()),
             Input::YoutubeLink(_) => {
-                let (ffmpeg, ffprobe) = setup_ffmpeg()?;
+                let (ffmpeg, ffprobe) = setup_ffmpeg(use_system_ffmpeg)?;
                 let ytdlp = setup_ytdlp()?;
                 Ok(Self { ffmpeg, ffprobe, ytdlp })
             }
@@ -48,7 +49,34 @@ impl Dependencies {
 }
 
 // and ffprobe too
-fn setup_ffmpeg() -> Res<(PathBuf, PathBuf)> {
+fn setup_ffmpeg(use_system_ffmpeg: bool) -> Res<(PathBuf, PathBuf)> {
+    if use_system_ffmpeg {
+        let ffmpeg_in_path = which("ffmpeg");
+        let ffprobe_in_path = which("ffprobe");
+
+        if let (Ok(ffmpeg_path), Ok(ffprobe_path)) =
+            (ffmpeg_in_path.as_ref(), ffprobe_in_path.as_ref())
+        {
+            println!(
+                "Using system FFmpeg binaries at {} and {}",
+                ffmpeg_path.display(),
+                ffprobe_path.display()
+            );
+            return Ok((ffmpeg_path.clone(), ffprobe_path.clone()));
+        }
+
+        if let Err(err) = ffmpeg_in_path {
+            eprintln!(
+                "ffmpeg not found in PATH ({err}); falling back to bundled download."
+            );
+        }
+        if let Err(err) = ffprobe_in_path {
+            eprintln!(
+                "ffprobe not found in PATH ({err}); falling back to bundled download."
+            );
+        }
+    }
+
     let data_dir = local_data_dir()?;
     create_dir_all(&data_dir)?;
 

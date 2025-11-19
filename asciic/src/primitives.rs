@@ -74,7 +74,7 @@ impl AsciiCompiler {
             return Err("Could not detect the terminal's window size.".into());
         };
 
-        let dependencies = Dependencies::setup(&input)?;
+        let dependencies = Dependencies::setup(&input, args.use_system_ffmpeg)?;
 
         let filter_type = args.filter_type.into();
 
