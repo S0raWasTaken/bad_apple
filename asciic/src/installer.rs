@@ -78,10 +78,16 @@ fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
-        if system_ffmpeg.is_none() || system_ffprobe.is_none() {
-            return Err(
-                "Automatic dependency management is unsupported for this OS",
-            );
+        if system_ffmpeg.is_none() {
+            return Err("ffmpeg not found in PATH.\n\
+                Automatic dependency management is unsupported for this OS"
+                .into());
+        }
+
+        if system_ffprobe.is_none() {
+            return Err("ffprobe not found in PATH.\n\
+                Automatic dependency management is unsupported for this OS"
+                .into());
         }
     }
 
@@ -119,38 +125,41 @@ fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
-        return Err(
-            "Automatic dependency management is unsupported for this OS".into(),
-        );
+        return Err("yt-dlp not found in PATH\n\
+            Automatic dependency management is unsupported for this OS"
+            .into());
     }
 
-    let data_dir = local_data_dir()?;
-
-    let ytdlp_output = data_dir.join("yt-dlp");
-
-    if !ytdlp_output.exists() {
-        println!("Downloading yt-dlp binary...");
-        download_binary(URLS[2], &ytdlp_output)?;
-    }
-    #[cfg(unix)]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
-        fix_perms(&ytdlp_output)?;
+        let data_dir = local_data_dir()?;
+
+        let ytdlp_output = data_dir.join("yt-dlp");
+
+        if !ytdlp_output.exists() {
+            println!("Downloading yt-dlp binary...");
+            download_binary(URLS[2], &ytdlp_output)?;
+        }
+        #[cfg(unix)]
+        {
+            fix_perms(&ytdlp_output)?;
+        }
+
+        println!("Checking for yt-dlp updates...");
+
+        let output = Command::new(&ytdlp_output)
+            .arg("-U")
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .output()?;
+
+        if !output.status.success() {
+            eprintln!("yt-dlp update check failed");
+        }
+
+        Ok(ytdlp_output)
     }
-
-    println!("Checking for yt-dlp updates...");
-
-    let output = Command::new(&ytdlp_output)
-        .arg("-U")
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .output()?;
-
-    if !output.status.success() {
-        eprintln!("yt-dlp update check failed");
-    }
-
-    Ok(ytdlp_output)
 }
 
 fn download_binary(url: &str, output: &Path) -> Res<()> {
@@ -178,19 +187,16 @@ fn fix_perms(file: &Path) -> Result<(), std::io::Error> {
 
 #[inline]
 fn find_system_binary(name: &str) -> Option<PathBuf> {
-    match which(name) {
-        Ok(path) => {
-            println!(
-                "{LIGHT_GREEN}Using system {name} binary at {}{RESET}",
-                path.display()
-            );
-            Some(path)
-        }
-        Err(_) => {
-            eprintln!(
-                "{RED}{name} not found in PATH; falling back to bundled download.{RESET}"
-            );
-            None
-        }
+    if let Ok(path) = which(name) {
+        println!(
+            "{LIGHT_GREEN}Using system {name} binary at {}{RESET}",
+            path.display()
+        );
+        Some(path)
+    } else {
+        eprintln!(
+            "{RED}{name} not found in PATH; falling back to bundled download.{RESET}"
+        );
+        None
     }
 }

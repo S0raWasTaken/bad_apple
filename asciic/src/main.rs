@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 use std::fs::remove_file;
 use std::process::exit;
 use std::sync::atomic::Ordering::SeqCst;
