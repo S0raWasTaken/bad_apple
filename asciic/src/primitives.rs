@@ -2,10 +2,11 @@ use std::fs::{File, read_dir};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicU8, AtomicUsize};
+use std::sync::atomic::AtomicU8;
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 use clap::crate_version;
+use indicatif::{ProgressBar, ProgressStyle};
 use libasciic::{AsciiBuilder, FilterType, Style};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use ron::ser::PrettyConfig;
@@ -15,7 +16,7 @@ use tempfile::TempDir;
 use zstd::encode_all;
 
 use crate::children::{ffprobe, yt_dlp};
-use crate::colours::{BOLD, CYAN, RESET, YELLOW};
+use crate::colours::{BOLD, RESET, YELLOW};
 use crate::installer::Dependencies;
 use crate::{Res, children::ffmpeg, cli::Args};
 
@@ -149,8 +150,14 @@ impl AsciiCompiler {
             .map(|e| e.path())
             .collect::<Vec<_>>();
 
-        let processed = AtomicUsize::new(0);
         let total = frames.len();
+        let pb = ProgressBar::new(total as u64);
+        pb.set_style(ProgressStyle::with_template(
+            "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+        )
+        .unwrap()
+        .progress_chars("██░"));
+        pb.set_message("Processing frames");
 
         // The compiler wanted to end its own life, so I'm giving
         // this variable an explicit type.
@@ -160,7 +167,6 @@ impl AsciiCompiler {
                 if self.stop_handle.load(Relaxed) {
                     return Err("Stopped.".into());
                 }
-                let now = processed.fetch_add(1, Relaxed);
 
                 // Early fail: filename must be a number
                 {
@@ -171,10 +177,7 @@ impl AsciiCompiler {
                         .ok_or(FILE_STEM_NAN)?;
                 }
 
-                print!(
-                    "\r{CYAN}Processing: {}% {now}/{total}{RESET}",
-                    (100 * now) / total
-                );
+                pb.inc(1);
                 let uncompressed_frame: String = self.make_frame(&entry)?;
                 Ok((
                     entry.clone(),
@@ -183,6 +186,8 @@ impl AsciiCompiler {
             })
             .collect::<Res<_>>()?;
 
+        pb.finish_with_message("Frames processed");
+
         frames.sort_by_key(|(path, _)| {
             path.file_stem()
                 .and_then(|s| s.to_str())
@@ -190,14 +195,17 @@ impl AsciiCompiler {
                 .unwrap() // Should've failed early if the file stem is NaN
         });
 
-        let mut processed = 0;
+        let pb_link = ProgressBar::new(total as u64);
+        pb_link.set_style(ProgressStyle::with_template(
+            "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+        )
+        .unwrap()
+        .progress_chars("██░"));
+        pb_link.set_message("Linking frames");
+
         // Let's write to the tar archive in a single thread, for obvious reasons.
         for (path, compressed_frame) in frames {
-            processed += 1;
-            print!(
-                "\r{CYAN}Linking: {}% {processed}/{total}{RESET}",
-                (100 * processed) / total
-            );
+            pb_link.inc(1);
 
             let mut inside_path = PathBuf::from(".");
             inside_path.set_file_name(path.file_stem().unwrap());
@@ -205,6 +213,7 @@ impl AsciiCompiler {
 
             add_file(&mut tar_archive, inside_path, &compressed_frame)?;
         }
+        pb_link.finish_with_message("Linking done");
 
         if !self.no_audio {
             let mut audio = File::open(tmp_path.join("audio.mp3"))?;

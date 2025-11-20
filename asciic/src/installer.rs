@@ -2,11 +2,12 @@
 // How fun.
 
 use std::{
-    fs::{self, create_dir_all},
+    fs::{self, create_dir_all, File},
     path::{Path, PathBuf},
     process::Command,
 };
 
+use indicatif::{ProgressBar, ProgressStyle};
 use crate::{
     Res,
     colours::{LIGHT_GREEN, RED, RESET},
@@ -146,8 +147,21 @@ fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
 
 fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
     println!("Downloading {} binary...", output.file_stem().unwrap().display());
-    let bytes = reqwest::blocking::get(url)?.error_for_status()?.bytes()?;
-    fs::write(output, bytes)?;
+    let response = reqwest::blocking::get(url)?.error_for_status()?;
+    let total_size = response.content_length().unwrap_or(0);
+
+    let pb = ProgressBar::new(total_size);
+    pb.set_style(ProgressStyle::with_template(
+        "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+    )
+    .unwrap()
+    .progress_chars("██░"));
+    pb.set_message("Downloading");
+
+    let mut file = File::create(output)?;
+    std::io::copy(&mut pb.wrap_read(response), &mut file)?;
+
+    pb.finish_with_message("Download complete");
     println!("Success! {}", output.display());
 
     #[cfg(unix)]
