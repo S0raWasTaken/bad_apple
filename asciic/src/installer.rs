@@ -72,15 +72,16 @@ fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
     }
 
     let data_dir = local_data_dir()?;
-    create_dir_all(&data_dir)?;
 
     let ffmpeg_output = data_dir.join("ffmpeg");
     let ffprobe_output = data_dir.join("ffprobe");
 
     if !ffmpeg_output.exists() && system_ffmpeg.is_none() {
+        create_dir_all(&data_dir)?;
         download_and_setup_binary(URLS[0], &ffmpeg_output)?;
     }
     if !ffprobe_output.exists() && system_ffprobe.is_none() {
+        create_dir_all(&data_dir)?;
         download_and_setup_binary(URLS[1], &ffprobe_output)?;
     }
 
