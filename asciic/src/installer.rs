@@ -174,7 +174,6 @@ fn fix_perms(file: &Path) -> Result<(), std::io::Error> {
     let mut perms = fs::metadata(file)?.permissions();
     perms.set_mode(perms.mode() | 0o111);
     fs::set_permissions(file, perms)?;
-    // println!("Set executable permissions for {}", file.display());
     Ok(())
 }
 
@@ -182,7 +181,7 @@ fn fix_perms(file: &Path) -> Result<(), std::io::Error> {
 fn find_system_binary(name: &str) -> Option<PathBuf> {
     if let Ok(path) = which(name) {
         println!(
-            "{GREEN}Using system {name} binary at {}{RESET}",
+            "       {GREEN}Using system {name} binary at {}{RESET}",
             path.display()
         );
         Some(path)

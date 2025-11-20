@@ -70,7 +70,9 @@ pub fn ffprobe(ffprobe_path: &Path, video_path: &str) -> Res<(u64, u64)> {
 
 pub const YTDLP_FLAGS: [&str; 3] = ["--quiet", "--no-warnings", "--progress"];
 pub fn yt_dlp(ytdlp_path: &Path, url: &str, output: &str) -> Res<()> {
-    println!("       {BCYAN}Downloading video to {RESET}{YELLOW}{output}");
+    println!(
+        "       {BCYAN}Downloading video to {RESET}{YELLOW}{output}{RESET}"
+    );
     let status = Command::new(ytdlp_path)
         .args(YTDLP_FLAGS)
         .args(["-t", "mp4", "-o", output, url])
