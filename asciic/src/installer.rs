@@ -158,8 +158,19 @@ fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
     .progress_chars("██░"));
     pb.set_message("Downloading");
 
-    let mut file = File::create(output)?;
-    std::io::copy(&mut pb.wrap_read(response), &mut file)?;
+    let temp_output = output.with_extension("tmp");
+    let mut file = File::create(&temp_output)?;
+    match std::io::copy(&mut pb.wrap_read(response), &mut file) {
+        Ok(_) => {
+            drop(file);
+            fs::rename(&temp_output, output)?;
+        }
+        Err(e) => {
+            drop(file);
+            let _ = fs::remove_file(&temp_output);
+            return Err(e.into());
+        }
+    }
 
     pb.finish_with_message("Download complete");
     println!("Success! {}", output.display());
