@@ -153,7 +153,6 @@ fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
     }
 
     pb.finish_and_clear();
-    // pb.finish_with_message("Download complete");
     println!(
         "       {BCYAN}Success! {RESET}{YELLOW}{}{RESET}",
         output.display()
