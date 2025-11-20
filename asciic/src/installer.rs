@@ -1,5 +1,8 @@
-// I'll have to implement my own installer, because the yt-dlp crate's LibraryInstaller does not work.
-// How fun.
+// Suppresses warnings on other systems
+#![cfg_attr(
+    not(any(target_os = "windows", target_os = "linux")),
+    allow(unreachable_code, unused_variables)
+)]
 
 use std::{
     fs::{self, create_dir_all},
@@ -39,17 +42,9 @@ pub struct Dependencies {
 }
 
 impl Dependencies {
-    #[allow(unused_mut)] // Used on any OS that's not linux or windows.
-    pub fn setup(input: &Input, mut use_system_binaries: bool) -> Res<Self> {
+    pub fn setup(input: &Input, use_system_binaries: bool) -> Res<Self> {
         #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-        {
-            if !use_system_binaries {
-                eprintln!(
-                    "{RED}Automatically setting the flag --use-system-binaries{RESET}"
-                );
-                use_system_binaries = true;
-            }
-        }
+        let use_system_binaries = true;
 
         match input {
             Input::Video(_) => {
@@ -76,31 +71,17 @@ fn setup_ffmpeg(use_system_binaries: bool) -> Res<(PathBuf, PathBuf)> {
         system_ffprobe = find_system_binary("ffprobe");
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    {
-        if system_ffmpeg.is_none() {
-            return Err("ffmpeg not found in PATH.\n\
-                Automatic dependency management is unsupported for this OS"
-                .into());
-        }
-
-        if system_ffprobe.is_none() {
-            return Err("ffprobe not found in PATH.\n\
-                Automatic dependency management is unsupported for this OS"
-                .into());
-        }
-    }
-
     let data_dir = local_data_dir()?;
-    create_dir_all(&data_dir)?;
 
     let ffmpeg_output = data_dir.join("ffmpeg");
     let ffprobe_output = data_dir.join("ffprobe");
 
     if !ffmpeg_output.exists() && system_ffmpeg.is_none() {
+        create_dir_all(&data_dir)?;
         download_and_setup_binary(URLS[0], &ffmpeg_output)?;
     }
     if !ffprobe_output.exists() && system_ffprobe.is_none() {
+        create_dir_all(&data_dir)?;
         download_and_setup_binary(URLS[1], &ffprobe_output)?;
     }
 
@@ -115,33 +96,23 @@ fn setup_ytdlp(use_system_binaries: bool) -> Res<PathBuf> {
         return Ok(ytdlp);
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    {
-        return Err("yt-dlp not found in PATH\n\
-            Automatic dependency management is unsupported for this OS"
-            .into());
+    let data_dir = local_data_dir()?;
+
+    let ytdlp_output = data_dir.join("yt-dlp");
+
+    if !ytdlp_output.exists() {
+        download_and_setup_binary(URLS[2], &ytdlp_output)?;
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
-    {
-        let data_dir = local_data_dir()?;
+    println!("Checking for yt-dlp updates...");
 
-        let ytdlp_output = data_dir.join("yt-dlp");
+    let status = Command::new(&ytdlp_output).arg("-U").status()?;
 
-        if !ytdlp_output.exists() {
-            download_and_setup_binary(URLS[2], &ytdlp_output)?;
-        }
-
-        println!("Checking for yt-dlp updates...");
-
-        let status = Command::new(&ytdlp_output).arg("-U").status()?;
-
-        if !status.success() {
-            eprintln!("yt-dlp update check failed");
-        }
-
-        Ok(ytdlp_output)
+    if !status.success() {
+        eprintln!("yt-dlp update check failed");
     }
+
+    Ok(ytdlp_output)
 }
 
 fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
@@ -151,9 +122,7 @@ fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
     println!("Success! {}", output.display());
 
     #[cfg(unix)]
-    {
-        fix_perms(output)?;
-    }
+    fix_perms(output)?;
 
     Ok(())
 }
@@ -183,12 +152,17 @@ fn find_system_binary(name: &str) -> Option<PathBuf> {
         );
         Some(path)
     } else {
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        {
+            eprintln!(
+                "{RED}{name} not found in PATH.\n\
+                Automatic dependency management is not supported for this OS.{RESET}"
+            );
+            std::process::exit(1);
+        }
         eprintln!(
             "{RED}{name} not found in PATH; falling back to bundled download.{RESET}"
         );
-        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-        eprintln!("{RED}{name} not found in PATH.{RESET}");
         None
     }
 }
