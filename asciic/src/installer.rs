@@ -140,7 +140,10 @@ fn download_and_setup_binary(url: &str, output: &Path) -> Res<()> {
     match std::io::copy(&mut pb.wrap_read(response), &mut file) {
         Ok(_) => {
             drop(file);
-            fs::rename(&temp_output, output)?;
+            if let Err(e) = fs::rename(&temp_output, output) {
+                let _ = fs::remove_file(&temp_output);
+                return Err(e.into());
+            }
         }
         Err(e) => {
             drop(file);
