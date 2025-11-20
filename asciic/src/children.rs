@@ -8,20 +8,30 @@ use std::{
 
 use crate::{
     Res,
-    colours::{RED, YELLOW},
+    colours::{BCYAN, RED, RESET, YELLOW},
 };
 
 pub static FFMPEG_RUNNING: AtomicBool = AtomicBool::new(false);
 
+const FFMPEG_FLAGS: [&str; 3] = ["-loglevel", "warning", "-stats"];
 pub fn ffmpeg(ffmpeg_path: &Path, args: &[&str]) -> Res<()> {
     FFMPEG_RUNNING.store(true, SeqCst);
 
-    let status = Command::new(ffmpeg_path).args(args).status();
+    let status = Command::new(ffmpeg_path)
+        .args(FFMPEG_FLAGS) // Default args
+        .args(args)
+        .status();
 
     FFMPEG_RUNNING.store(false, SeqCst);
 
-    if !status?.success() {
-        return Err("FFMPEG failed to run".into());
+    let status = status?;
+
+    if !status.success() {
+        return Err(format!(
+            "FFMPEG failed with status: {{{}}}",
+            status.code().map_or("TERMINATED".to_string(), |s| s.to_string())
+        )
+        .into());
     }
 
     Ok(())
@@ -58,14 +68,19 @@ pub fn ffprobe(ffprobe_path: &Path, video_path: &str) -> Res<(u64, u64)> {
     Ok((fps.round() as u64, (1_000_000.0 / fps).round() as u64))
 }
 
+pub const YTDLP_FLAGS: [&str; 3] = ["--quiet", "--no-warnings", "--progress"];
 pub fn yt_dlp(ytdlp_path: &Path, url: &str, output: &str) -> Res<()> {
+    println!(
+        "       {BCYAN}Downloading video to {RESET}{YELLOW}{output}{RESET}"
+    );
     let status = Command::new(ytdlp_path)
+        .args(YTDLP_FLAGS)
         .args(["-t", "mp4", "-o", output, url])
         .status()?;
 
     if !status.success() {
         return Err(format!(
-            "{RED}yt-dlp failed to grab a video from {YELLOW}'{url}'"
+            "{RED}yt-dlp failed to grab a video from {YELLOW}'{url}'{RESET}"
         )
         .into());
     }

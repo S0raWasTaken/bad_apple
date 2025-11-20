@@ -1,11 +1,12 @@
 use std::fs::{File, read_dir};
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicU8, AtomicUsize};
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 use clap::crate_version;
+use indicatif::{ProgressBar, ProgressStyle};
 use libasciic::{AsciiBuilder, FilterType, Style};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use ron::ser::PrettyConfig;
@@ -15,7 +16,7 @@ use tempfile::TempDir;
 use zstd::encode_all;
 
 use crate::children::{ffprobe, yt_dlp};
-use crate::colours::{BOLD, CYAN, RESET, YELLOW};
+use crate::colours::{BCYAN, BDIM, BOLD, RESET, YELLOW};
 use crate::installer::Dependencies;
 use crate::{Res, children::ffmpeg, cli::Args};
 
@@ -45,6 +46,9 @@ This might be an FFMPEG related issue.
 If you ever see this message, please open an \
 issue in https://github.com/S0raWasTaken/bad_apple \
 \x1b[0m";
+
+const TEMPLATE: &str =
+    "{msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})";
 
 pub struct AsciiCompiler {
     pub stop_handle: AtomicBool,
@@ -135,8 +139,14 @@ impl AsciiCompiler {
         let video_path = video.to_string_lossy();
         let (fps, frametime): (u64, u64) =
             ffprobe(&self.dependencies.ffprobe, &video_path)?;
+
         self.split_video_frames(&video_path)?;
-        if !self.no_audio {
+
+        if self.no_audio {
+            println!(
+                "{BDIM}[3/5]{RESET}  {BCYAN}Skipped audio extraction.{RESET}"
+            );
+        } else {
             self.extract_audio(&video_path)?;
         }
 
@@ -149,8 +159,14 @@ impl AsciiCompiler {
             .map(|e| e.path())
             .collect::<Vec<_>>();
 
-        let processed = AtomicUsize::new(0);
         let total = frames.len();
+        let pb = ProgressBar::new(total as u64);
+        pb.set_style(
+            ProgressStyle::with_template(TEMPLATE)?.progress_chars("██░"),
+        );
+        pb.set_message(format!(
+            "{BDIM}[4/5]{RESET}  {BCYAN}Processing frames{RESET}"
+        ));
 
         // The compiler wanted to end its own life, so I'm giving
         // this variable an explicit type.
@@ -160,7 +176,6 @@ impl AsciiCompiler {
                 if self.stop_handle.load(Relaxed) {
                     return Err("Stopped.".into());
                 }
-                let now = processed.fetch_add(1, Relaxed);
 
                 // Early fail: filename must be a number
                 {
@@ -171,10 +186,7 @@ impl AsciiCompiler {
                         .ok_or(FILE_STEM_NAN)?;
                 }
 
-                print!(
-                    "\r{CYAN}Processing: {}% {now}/{total}{RESET}",
-                    (100 * now) / total
-                );
+                pb.inc(1);
                 let uncompressed_frame: String = self.make_frame(&entry)?;
                 Ok((
                     entry.clone(),
@@ -183,6 +195,8 @@ impl AsciiCompiler {
             })
             .collect::<Res<_>>()?;
 
+        pb.finish();
+
         frames.sort_by_key(|(path, _)| {
             path.file_stem()
                 .and_then(|s| s.to_str())
@@ -190,14 +204,17 @@ impl AsciiCompiler {
                 .unwrap() // Should've failed early if the file stem is NaN
         });
 
-        let mut processed = 0;
+        let pb_link = ProgressBar::new(total as u64);
+        pb_link.set_style(
+            ProgressStyle::with_template(TEMPLATE)?.progress_chars("██░"),
+        );
+        pb_link.set_message(format!(
+            "{BDIM}[5/5]{RESET}  {BCYAN}Linking...       {RESET}"
+        ));
+
         // Let's write to the tar archive in a single thread, for obvious reasons.
         for (path, compressed_frame) in frames {
-            processed += 1;
-            print!(
-                "\r{CYAN}Linking: {}% {processed}/{total}{RESET}",
-                (100 * processed) / total
-            );
+            pb_link.inc(1);
 
             let mut inside_path = PathBuf::from(".");
             inside_path.set_file_name(path.file_stem().unwrap());
@@ -205,6 +222,7 @@ impl AsciiCompiler {
 
             add_file(&mut tar_archive, inside_path, &compressed_frame)?;
         }
+        pb_link.finish();
 
         if !self.no_audio {
             let mut audio = File::open(tmp_path.join("audio.mp3"))?;
@@ -247,6 +265,9 @@ impl AsciiCompiler {
 
     #[inline]
     fn split_video_frames(&self, video_path: &str) -> Res<()> {
+        println!(
+            "{BDIM}[2/5]{RESET}  {BCYAN}Splitting frames from {RESET}{YELLOW}{video_path}{BCYAN}...{RESET}"
+        );
         ffmpeg(
             &self.dependencies.ffmpeg,
             &[
@@ -263,6 +284,7 @@ impl AsciiCompiler {
 
     #[inline]
     fn extract_audio(&self, video_path: &str) -> Res<()> {
+        println!("{BDIM}[3/5]{RESET}  {BCYAN}Extracting audio...{RESET}");
         ffmpeg(
             &self.dependencies.ffmpeg,
             &[
