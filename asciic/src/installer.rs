@@ -1,4 +1,4 @@
-// Supresses warnings on other systems
+// Suppresses warnings on other systems
 #![cfg_attr(
     not(any(target_os = "windows", target_os = "linux")),
     allow(unreachable_code, unused_variables)
