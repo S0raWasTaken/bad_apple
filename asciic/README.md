@@ -1,89 +1,130 @@
-# asciic
-An asciinema compiler.
+# ASCII Compiler
+This project started as a helper to compile videos into asciinema format, mainly focused on making 
+[bad apple](https://www.youtube.com/watch?v=UkgK8eUdpAo) playable on a terminal.
 
-This project was made as a helper to compile videos into asciinema, mainly focused in making the [bad apple](https://www.youtube.com/watch?v=UkgK8eUdpAo) video play on a text interface (TTY/framebuffer/console/etc).
-<br>It is one of the steps I took before working on my bad apple kernel & OS (WIP)
+Nowadays, it's gotten pretty big and full of features to make your own stuff in your own style.
 
-## Installation instructions
-You must have `cargo` and `rustc` installed. FFmpeg and yt-dlp will be downloaded and managed automatically.
+## Preview
+> Find video previews on [my youtube channel](https://www.youtube.com/@S0ra-)
+
+<img width="400" height="333" alt="image" src="https://github.com/user-attachments/assets/4ac1d1e9-5cc8-44a6-afba-afefbf5ceb05" />
+<img width="765" height="412" alt="image" src="https://github.com/user-attachments/assets/69be5e11-928f-405c-ba20-c52fb6224acd" />
+<img width="765" height="412" alt="image" src="https://github.com/user-attachments/assets/d2447b34-2e35-45ea-b4d8-94ad0c6c04e3" />
+
+## Installation
+
+You must have `cargo` and `rustc` installed.
+
 ```sh
 cargo install --git https://github.com/S0raWasTaken/bad_apple asciic
 ```
 
-FFmpeg & yt-dlp can be found in:
+## Dependency management
+
+This crate supports automatic FFMPEG & YT-DLP management on Windows and Linux.
+
+Any other OS will have the flag `--use-system-binaries` forcefully set and will *fail* if it can't find one of these in your PATH:
+- `ffmpeg`
+- `ffprobe`
+- `yt-dlp`
+
+Of course, you don't need any of these to compile a single image, nor do you need to have yt-dlp if you don't plan on using the `--youtube` argument.
+
+So yeah, if your OS supports Rust, it likely runs this crate :)
+
+Automatically managed dependencies can be found here:
 - `%APPDATA%\asciic-bin\` on Windows, or:
 - `$HOME/.local/share/asciic-bin/` on Linux.
 
 ## Usage
+
 > --help output:
+
 ```yml
-USAGE:
-    asciic [OPTIONS] [video] [output] [-- <ffmpeg-flags>...]
+Usage: asciic [OPTIONS] [VIDEO]
 
-ARGS:
-    <video>              Input video to transform in asciinema
-    <output>             Output file name [default: output]
-    <ffmpeg-flags>...    Pass extra flags to ffmpeg
+Arguments:
+  [VIDEO]
+          Path to a valid video file
 
-OPTIONS:
-    -c
-            Colorize output
+Options:
+  -c, --colorize
+          Makes the output colorized
 
-    -h, --help
-            Print help information
+  -n, --no-audio
+          Skips audio extraction and inclusion in the output
 
-    -i, --image <image>
-            Compiles a single image
+      --use-system-binaries
+          Use ffmpeg, ffprobe and yt-dlp from the system PATH when available
 
-    -n, --skip-compression
-            Disables compression on colored outputs
+  -i, --image <IMAGE>
+          Path to a valid image file
 
-        --no-audio
-            skips audio generation
+  -y, --youtube <YOUTUBE>
+          Youtube video URL to download and use
 
-        --paint-fg
-            Paints the foreground instead of background
+  -o, --output <OUTPUT>
+          Custom output path, defaults to the video's file name
 
-    -s, --size <frame-size>
-            The ratio that each frame should be resized [default: 216x56]
+  -s, --style <STYLE>
+          Sets the output style
 
-    -t, --threshold <compression-threshold>
-            Manually sets the compression threshold [default: 10]
+          Possible values:
+          - fg-paint: Paint the foreground (characters) with RGB colors. Characters vary based on brightness, and each character is colored
+          - bg-paint: Paint the background with RGB colors while keeping characters visible. Characters vary based on brightness with colored backgrounds
+          - bg-only:  Paint only the background with RGB colors using space characters. Creates a purely color-based representation without visible ASCII characters
+          
+          [default: bg-only]
 
-    -V, --version
-            Print version information
+      --temp <TEMP>
+          Sets a custom path to create a temporary directory. It could be used to write the temporary files in memory, if the user sets this to /dev/shm
+          
+          [default: .]
 
+  -t, --threshold <THRESHOLD>
+          Sets the colour compression threshold
+          
+          [default: 3]
+
+      --charset <CHARSET>
+          Custom charset for the output
+          
+          [default: .:-+=#@]
+
+  -f, --filter-type <FILTER_TYPE>
+          Set a custom filter type for image resizing
+          
+          [default: nearest]
+          [possible values: nearest, triangle, catmull-rom, gaussian, lanczos3]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 ```
 
-Examples:
-> Compiling a normal video:
+### Examples
+
+Compiling a normal video:
 ```sh
-asciic video.mp4 output.bapple
+# outputs video.bapple
+asciic video.mp4
 ```
 
-> Compiling a colored video:
+Compiling a coloured video:
 ```sh
-asciic -c video.mp4 output.bapple
+# outputs video.bapple
+asciic -c video.mp4
 ```
 
-> Compiling an image:
+Compiling an image:
 ```sh
+# outputs image.txt
 asciic -i image.png
-# Output will be available in image.txt
 ```
 
-> Compiling a colored image:
+Compiling a coloured image:
 ```sh
-asciic -i image.png -c --skip-compression
-# We skip the color compression step, since it's a single image
+asciic -c -i image.png
 ```
-
-> Passing the frame size argument:
-```sh
-asciic video.mp4 output.bapple -s 500x150
-# This command gives out a warning about things getting wonky at high image sizes,
-# but you can safely ignore them if you want :)
-```
-
-## Copying
-Read [here](https://github.com/S0raWasTaken/bad_apple#copying)
