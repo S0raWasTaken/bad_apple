@@ -17,7 +17,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-libasciic = "1.0.0"
+libasciic = "1.0.1"
 ```
 
 ## Quick Start
