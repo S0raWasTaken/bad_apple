@@ -13,7 +13,7 @@ use crate::{
 
 pub static FFMPEG_RUNNING: AtomicBool = AtomicBool::new(false);
 
-const FFMPEG_FLAGS: [&str; 3] = ["-loglevel", "warning", "-stats"];
+const FFMPEG_FLAGS: [&str; 3] = ["-loglevel", "error", "-stats"];
 pub fn ffmpeg(ffmpeg_path: &Path, args: &[&str]) -> Res<()> {
     FFMPEG_RUNNING.store(true, SeqCst);
 
