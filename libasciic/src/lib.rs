@@ -271,8 +271,10 @@ impl<R: Read + Seek> AsciiBuilder<R> {
                 }
             }
             if self.colour {
-                frame.push_str("\x1b[0m\n");
-            } else {
+                frame.push_str("\x1b[0m");
+            }
+
+            if y != self.dimensions.1 - 1 {
                 frame.push('\n');
             }
         }
