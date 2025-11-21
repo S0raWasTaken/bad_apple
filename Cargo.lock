@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "asciic"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "clap",
  "ctrlc",
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "bplay"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "clap",
  "rodio",
@@ -1252,7 +1252,7 @@ checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
 
 [[package]]
 name = "libasciic"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "clap",
  "image",
