@@ -13,6 +13,7 @@ use ron::ser::PrettyConfig;
 use serde::Serialize;
 use tar::{Builder, Header};
 use tempfile::TempDir;
+use terminal_size::{Height, Width, terminal_size};
 use zstd::encode_all;
 
 use crate::children::{ffprobe, yt_dlp};
@@ -80,9 +81,9 @@ impl AsciiCompiler {
 
         let charset = args.charset;
 
-        let Some(dimensions) = term_size::dimensions().and_then(|(w, h)| {
-            Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?))
-        }) else {
+        let Some(dimensions) = terminal_size()
+            .map(|(Width(w), Height(h))| (u32::from(w), u32::from(h)))
+        else {
             return Err("Could not detect the terminal's window size.".into());
         };
 
