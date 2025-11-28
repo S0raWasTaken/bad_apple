@@ -13,7 +13,7 @@
 //! use libasciic::{AsciiBuilder, Style};
 //!
 //! let file = File::open("image.png")?;
-//! let ascii = AsciiBuilder::new(file)?
+//! let ascii = AsciiBuilder::new(file)
 //!     .dimensions(80, 40)
 //!     .colorize(true)
 //!     .style(Style::FgPaint)
@@ -21,7 +21,7 @@
 //!     .make_ascii()?;
 //!
 //! println!("{}", ascii);
-//! # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+//! # Ok::<(), AsciiError>(())
 //! ```
 #![warn(clippy::pedantic)]
 #![allow(
@@ -157,9 +157,8 @@ impl Charset {
     /// # Examples
     ///
     /// ```no_run
-    /// # use libasciic::Charset;
-    /// let charset = Charset::mkcharset(".:-+=#@")?;
-    /// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+    /// use libasciic::Charset;
+    /// let charset = Charset::mkcharset(".:-+=#@");
     /// ```
     ///
     /// # Returns
@@ -203,7 +202,7 @@ impl Charset {
 /// use libasciic::{AsciiBuilder, Style, FilterType};
 ///
 /// let file = File::open("photo.jpg")?;
-/// let ascii = AsciiBuilder::new(file)?
+/// let ascii = AsciiBuilder::new(file)
 ///     .dimensions(100, 50)
 ///     .colorize(true)
 ///     .style(Style::BgPaint)
@@ -211,7 +210,6 @@ impl Charset {
 ///     .charset(".:;+=xX$@")?
 ///     .filter_type(FilterType::Lanczos3)
 ///     .make_ascii()?;
-/// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
 /// ```
 pub struct AsciiBuilder<R: Read + Seek> {
     image: BufReader<R>,
@@ -240,6 +238,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// - Foreground paint style
     /// - Nearest neighbor filtering
     /// - Zero compression threshold
+    /// - Background brightness: 0.2 (Only used on [Style::Mixed])
     pub fn new(image: R) -> Self {
         Self {
             image: BufReader::new(image),
@@ -409,9 +408,8 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// # use std::fs::File;
     /// # use libasciic::AsciiBuilder;
     /// # let file = File::open("image.png")?;
-    /// let builder = AsciiBuilder::new(file)?
-    ///     .charset(".'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$")?;
-    /// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+    /// let builder = AsciiBuilder::new(file)
+    ///     .charset(".'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$");
     /// ```
     #[inline]
     #[must_use]
