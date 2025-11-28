@@ -246,7 +246,7 @@ impl AsciiCompiler {
 
     #[inline]
     fn make_frame(&self, frame: &PathBuf) -> Res<String> {
-        Ok(AsciiBuilder::new(File::open(frame)?)?
+        Ok(AsciiBuilder::new(File::open(frame)?)
             .dimensions(self.dimensions.0, self.dimensions.1)
             .charset(&self.charset)
             .style(self.style)
