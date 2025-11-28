@@ -88,7 +88,7 @@ impl Style {
             return format!(
                 "\x1b[38;2;{}\x1b[48;2;{}{char}",
                 Self::rgb_to_string(rgb),
-                Self::reduce_brightness(rgb, factor.clamp(0.0, 1.0))
+                Self::reduce_brightness(rgb, factor)
             );
         }
         format!("\x1b[{}8;2;{}{char}", self.ansi(), Self::rgb_to_string(rgb))
@@ -98,7 +98,9 @@ impl Style {
         match self {
             Style::FgPaint => 3,
             Style::BgPaint | Style::BgOnly => 4,
-            _ => unreachable!(),
+            Style::Mixed => {
+                unreachable!("Mixed does not require Style::ansi()")
+            }
         }
     }
 
@@ -238,12 +240,8 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// - Foreground paint style
     /// - Nearest neighbor filtering
     /// - Zero compression threshold
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the default charset cannot be initialized.
-    pub fn new(image: R) -> Res<Self> {
-        Ok(Self {
+    pub fn new(image: R) -> Self {
+        Self {
             image: BufReader::new(image),
             dimensions: (0, 0),
             compression_threshold: 0,
@@ -252,7 +250,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
             colour: false,
             filter_type: FilterType::Nearest,
             background_brightness: 0.2,
-        })
+        }
     }
 
     /// Generates the ASCII art string from the configured image.
@@ -405,10 +403,6 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     ///
     /// The builder for method chaining.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if the charset cannot be parsed.
-    ///
     /// # Examples
     ///
     /// ```no_run
@@ -486,7 +480,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     #[inline]
     #[must_use]
     pub fn background_brightness(mut self, factor: f32) -> Self {
-        self.background_brightness = factor;
+        self.background_brightness = factor.clamp(0.0, 1.0);
         self
     }
 }
