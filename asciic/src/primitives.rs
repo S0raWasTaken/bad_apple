@@ -246,14 +246,14 @@ impl AsciiCompiler {
 
     #[inline]
     fn make_frame(&self, frame: &PathBuf) -> Res<String> {
-        AsciiBuilder::new(File::open(frame)?)?
+        Ok(AsciiBuilder::new(File::open(frame)?)
             .dimensions(self.dimensions.0, self.dimensions.1)
-            .charset(&self.charset)?
+            .charset(&self.charset)
             .style(self.style)
             .colorize(self.colorize)
             .filter_type(self.filter_type)
             .threshold(self.threshold.load(Relaxed))
-            .make_ascii()
+            .make_ascii()?)
     }
 
     #[inline]
