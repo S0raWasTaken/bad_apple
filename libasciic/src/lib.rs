@@ -23,23 +23,30 @@
 //! println!("{}", ascii);
 //! # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
 //! ```
+#![warn(clippy::pedantic)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 
-use std::{
-    error::Error,
-    fmt::Write,
-    io::{BufReader, Read, Seek},
-};
+mod error;
+
+use std::io::{BufReader, Read, Seek};
 
 use image::{GenericImageView, ImageReader};
 
 pub use image::imageops::FilterType;
 
-type Res<T> = Result<T, Box<dyn Error + Send + Sync>>;
+use crate::error::AsciiError;
+
+type Res<T> = Result<T, AsciiError>;
 /// Defines how colors are applied to ASCII art output.
 ///
 /// Different styles control whether characters themselves carry color information
 /// or if colors are applied to the background.
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub enum Style {
     /// Paint the foreground (characters) with RGB colors.
@@ -53,19 +60,62 @@ pub enum Style {
     /// Paint only the background with RGB colors using space characters.
     /// Creates a purely color-based representation without visible ASCII characters.
     BgOnly,
+
+    /// Paint both background and foreground.
+    /// It darkens the background by a configurable percentage, so you can actually see the
+    /// foreground characters.
+    ///
+    /// Be very mindful that **this doubles the amount of ansi control strings**, so it costs
+    /// a lot more to print the output.
+    Mixed,
 }
 
 impl Style {
-    /// Returns the ANSI escape code prefix for this style.
+    /// Generates an ANSI escape sequence to colorize a character.
     ///
-    /// - `FgPaint` returns `3` (foreground color prefix)
-    /// - `BgPaint` and `BgOnly` return `4` (background color prefix)
-    pub fn ansi(&self) -> u8 {
+    /// # Arguments
+    ///
+    /// * `char` - The character to colorize
+    /// * `rgb` - RGBA color values [red, green, blue, alpha]
+    /// * `factor` - Background brightness factor (0.0-1.0), only used for [`Style::Mixed`]
+    ///
+    /// # Returns
+    ///
+    /// A string containing the ANSI escape sequence and the character.
+    #[must_use]
+    pub fn colorize(&self, char: char, rgb: [u8; 4], factor: f32) -> String {
+        if let Self::Mixed = self {
+            return format!(
+                "\x1b[38;2;{}\x1b[48;2;{}{char}",
+                Self::rgb_to_string(rgb),
+                Self::reduce_brightness(rgb, factor.clamp(0.0, 1.0))
+            );
+        }
+        format!("\x1b[{}8;2;{}{char}", self.ansi(), Self::rgb_to_string(rgb))
+    }
+
+    fn ansi(self) -> u8 {
         match self {
             Style::FgPaint => 3,
-            Style::BgPaint => 4,
-            Style::BgOnly => 4,
+            Style::BgPaint | Style::BgOnly => 4,
+            _ => unreachable!(),
         }
+    }
+
+    #[inline]
+    fn reduce_brightness([r, g, b, _]: [u8; 4], factor: f32) -> String {
+        let [r, g, b] = [f32::from(r), f32::from(g), f32::from(b)];
+        Self::rgb_to_string([
+            (r * factor) as u8,
+            (g * factor) as u8,
+            (b * factor) as u8,
+            0,
+        ])
+    }
+
+    #[inline]
+    fn rgb_to_string([r, g, b, _]: [u8; 4]) -> String {
+        format!("{r};{g};{b}m")
     }
 }
 
@@ -86,6 +136,7 @@ impl Charset {
     /// # Returns
     ///
     /// The character that best represents this brightness level.
+    #[must_use]
     pub fn match_char(&self, brightness: u8) -> char {
         self.0
             .iter()
@@ -112,7 +163,8 @@ impl Charset {
     /// # Returns
     ///
     /// A `Charset` with evenly distributed brightness thresholds.
-    pub fn mkcharset(spec: &str) -> Res<Self> {
+    #[must_use]
+    pub fn mkcharset(spec: &str) -> Self {
         let mut chars: Vec<char> = spec.chars().collect();
         chars.insert(0, ' ');
 
@@ -125,8 +177,11 @@ impl Charset {
             thresholds.push(t);
         }
 
+        // I add an element at the start regardless, so it should never panic.
+        #[allow(clippy::missing_panics_doc)]
         let last = *chars.last().unwrap();
-        Ok(Self(thresholds, chars, last))
+
+        Self(thresholds, chars, last)
     }
 }
 
@@ -164,6 +219,7 @@ pub struct AsciiBuilder<R: Read + Seek> {
     style: Style,
     colour: bool,
     filter_type: FilterType,
+    background_brightness: f32,
 }
 
 impl<R: Read + Seek> AsciiBuilder<R> {
@@ -191,16 +247,13 @@ impl<R: Read + Seek> AsciiBuilder<R> {
             image: BufReader::new(image),
             dimensions: (0, 0),
             compression_threshold: 0,
-            charset: Charset::mkcharset(".:-+=#@")?,
+            charset: Charset::mkcharset(".:-+=#@"),
             style: Style::FgPaint,
             colour: false,
             filter_type: FilterType::Nearest,
+            background_brightness: 0.2,
         })
     }
-
-    const DIMENSIONS_ZERO_ERR: &str = "\
-    Please, set both dimensions to a non-zero value \
-    before running AsciiBuilder::make_ascii()";
 
     /// Generates the ASCII art string from the configured image.
     ///
@@ -218,10 +271,9 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// - Dimensions have not been set (are `(0, 0)`)
     /// - Image format cannot be determined
     /// - Image decoding fails
-    /// - String formatting fails
     pub fn make_ascii(self) -> Res<String> {
         if self.dimensions.0 == 0 || self.dimensions.1 == 0 {
-            return Err(Self::DIMENSIONS_ZERO_ERR.into());
+            return Err(AsciiError::DimensionsNotSet);
         }
 
         let resized_image = ImageReader::new(self.image)
@@ -250,8 +302,8 @@ impl<R: Read + Seek> AsciiBuilder<R> {
                 }
 
                 let char = match self.style {
-                    Style::FgPaint | Style::BgPaint => char,
                     Style::BgOnly => ' ',
+                    _ => char,
                 };
 
                 let should_colorize =
@@ -260,11 +312,11 @@ impl<R: Read + Seek> AsciiBuilder<R> {
                         || x == 0;
 
                 if should_colorize {
-                    write!(
-                        frame,
-                        "\x1b[{}8;2;{r};{g};{b}m{char}",
-                        self.style.ansi()
-                    )?;
+                    frame.push_str(&self.style.colorize(
+                        char,
+                        current_pixel,
+                        self.background_brightness,
+                    ));
                     last_colorized_pixel = current_pixel;
                 } else {
                     frame.push(char);
@@ -292,6 +344,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     ///
     /// The builder for method chaining.
     #[inline]
+    #[must_use]
     pub fn colorize(mut self, colorize: bool) -> Self {
         self.colour = colorize;
         self
@@ -313,6 +366,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// Must be called before `make_ascii()`. Consider that characters are typically
     /// taller than they are wide, so you may want to adjust the aspect ratio.
     #[inline]
+    #[must_use]
     pub fn dimensions(mut self, width: u32, height: u32) -> Self {
         self.dimensions = (width, height);
         self
@@ -335,6 +389,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// Only applies when colorization is enabled. Useful for reducing the size of
     /// colored ASCII art output by avoiding redundant ANSI escape sequences.
     #[inline]
+    #[must_use]
     pub fn threshold(mut self, threshold: u8) -> Self {
         self.compression_threshold = threshold;
         self
@@ -365,9 +420,10 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
     /// ```
     #[inline]
-    pub fn charset(mut self, charset: &str) -> Res<Self> {
-        self.charset = Charset::mkcharset(charset)?;
-        Ok(self)
+    #[must_use]
+    pub fn charset(mut self, charset: &str) -> Self {
+        self.charset = Charset::mkcharset(charset);
+        self
     }
 
     /// Sets the color application style.
@@ -380,6 +436,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     ///
     /// The builder for method chaining.
     #[inline]
+    #[must_use]
     pub fn style(mut self, style: Style) -> Self {
         self.style = style;
         self
@@ -402,8 +459,34 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// - `CatmullRom`: High quality
     /// - `Lanczos3`: Highest quality but slowest
     #[inline]
+    #[must_use]
     pub fn filter_type(mut self, filter_type: FilterType) -> Self {
         self.filter_type = filter_type;
+        self
+    }
+
+    /// Sets the background brightness factor for Mixed style.
+    ///
+    /// # Arguments
+    ///
+    /// * `factor` - A value between 0.0 and 1.0 that controls background brightness.
+    ///   - `1.0` keeps the background at full brightness (same as foreground)
+    ///   - `0.5` reduces background to 50% brightness
+    ///   - `0.2` (default) reduces background to 20% brightness
+    ///   - `0.0` makes the background completely black
+    ///
+    /// # Returns
+    ///
+    /// The builder for method chaining.
+    ///
+    /// # Notes
+    ///
+    /// Only applies when using [`Style::Mixed`]. Lower values create more contrast
+    /// between foreground characters and background, making text more readable.
+    #[inline]
+    #[must_use]
+    pub fn background_brightness(mut self, factor: f32) -> Self {
+        self.background_brightness = factor;
         self
     }
 }
