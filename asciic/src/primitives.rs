@@ -68,6 +68,7 @@ pub struct AsciiCompiler {
     filter_type: FilterType,
     background_brightness: f32,
     frame_size_limit: usize,
+    dynamic_compression: bool,
 }
 
 impl AsciiCompiler {
@@ -98,6 +99,8 @@ impl AsciiCompiler {
 
         let frame_size_limit = args.frame_size_limit * 1024;
 
+        let dynamic_compression = !args.skip_dynamic_compression;
+
         Ok(Self {
             stop_handle,
             temp_dir,
@@ -113,6 +116,7 @@ impl AsciiCompiler {
             filter_type,
             background_brightness,
             frame_size_limit,
+            dynamic_compression,
         })
     }
 
@@ -203,7 +207,9 @@ impl AsciiCompiler {
 
                 let mut threshold = first_threshold + 2;
 
-                while uncompressed_frame.len() > self.frame_size_limit {
+                while uncompressed_frame.len() > self.frame_size_limit
+                    && self.dynamic_compression
+                {
                     uncompressed_frame = self.make_frame(&entry, threshold)?;
                     threshold += 2;
                 }
