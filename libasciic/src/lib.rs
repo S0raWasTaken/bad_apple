@@ -238,7 +238,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// - Foreground paint style
     /// - Nearest neighbor filtering
     /// - Zero compression threshold
-    /// - Background brightness: 0.2 (Only used on [Style::Mixed])
+    /// - Background brightness: 0.2 (Only used on [`Style::Mixed`])
     pub fn new(image: R) -> Self {
         Self {
             image: BufReader::new(image),
