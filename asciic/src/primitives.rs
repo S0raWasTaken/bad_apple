@@ -66,6 +66,7 @@ pub struct AsciiCompiler {
     charset: String,
     threshold: AtomicU8,
     filter_type: FilterType,
+    background_brightness: f32,
 }
 
 impl AsciiCompiler {
@@ -92,6 +93,8 @@ impl AsciiCompiler {
 
         let filter_type = args.filter_type.into();
 
+        let background_brightness = args.background_brightness.clamp(0.0, 1.0);
+
         Ok(Self {
             stop_handle,
             temp_dir,
@@ -105,6 +108,7 @@ impl AsciiCompiler {
             charset,
             threshold,
             filter_type,
+            background_brightness,
         })
     }
 
@@ -253,6 +257,7 @@ impl AsciiCompiler {
             .colorize(self.colorize)
             .filter_type(self.filter_type)
             .threshold(self.threshold.load(Relaxed))
+            .background_brightness(self.background_brightness)
             .make_ascii()?)
     }
 

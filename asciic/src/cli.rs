@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum, command, crate_version};
+use clap::{Parser, ValueEnum, crate_version};
 
 use crate::primitives::Input;
 
@@ -79,6 +79,10 @@ pub struct Args {
     /// Set a custom filter type for image resizing.
     #[arg(short, long, default_value = "nearest")]
     pub filter_type: FilterType,
+
+    /// Pass a custom brightness value. Clamped between 0..1
+    #[arg(short, long = "bg-brightness", default_value = "0.2")]
+    pub background_brightness: f32,
 }
 
 impl Args {
