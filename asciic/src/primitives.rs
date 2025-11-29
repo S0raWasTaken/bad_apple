@@ -48,6 +48,7 @@ If you ever see this message, please open an \
 issue in https://github.com/S0raWasTaken/bad_apple \
 \x1b[0m";
 
+const ITERATION_LIMIT: i32 = 50;
 const ITERATION_LIMIT_ERR: &str = "\
 Iteration limit reached.
 This usually means that you set your uncompressed frame size too low.";
@@ -210,14 +211,12 @@ impl AsciiCompiler {
                     self.make_frame(&entry, first_threshold)?;
 
                 let mut threshold = first_threshold.saturating_add(2);
-
-                let iteration_limit = 50;
                 let mut iteration_count = 0;
 
                 while uncompressed_frame.len() > self.frame_size_limit
                     && self.dynamic_compression
                 {
-                    if iteration_count >= iteration_limit {
+                    if iteration_count >= ITERATION_LIMIT {
                         return Err(ITERATION_LIMIT_ERR.into());
                     }
                     uncompressed_frame = self.make_frame(&entry, threshold)?;
