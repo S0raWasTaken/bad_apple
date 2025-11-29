@@ -209,7 +209,7 @@ impl AsciiCompiler {
                 let mut uncompressed_frame: String =
                     self.make_frame(&entry, first_threshold)?;
 
-                let mut threshold = first_threshold + 2;
+                let mut threshold = first_threshold.saturating_add(2);
 
                 let iteration_limit = 50;
                 let mut iteration_count = 0;
@@ -217,11 +217,11 @@ impl AsciiCompiler {
                 while uncompressed_frame.len() > self.frame_size_limit
                     && self.dynamic_compression
                 {
-                    if iteration_count > iteration_limit {
+                    if iteration_count >= iteration_limit {
                         return Err(ITERATION_LIMIT_ERR.into());
                     }
                     uncompressed_frame = self.make_frame(&entry, threshold)?;
-                    threshold += 2;
+                    threshold = threshold.saturating_add(2);
                     iteration_count += 1;
                 }
 
