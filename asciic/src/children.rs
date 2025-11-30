@@ -8,7 +8,8 @@ use std::{
 
 use crate::{
     Res,
-    colours::{BCYAN, RED, RESET, YELLOW},
+    colours::{BCYAN, RESET, YELLOW},
+    error::CompilerError,
 };
 
 pub static FFMPEG_RUNNING: AtomicBool = AtomicBool::new(false);
@@ -27,11 +28,7 @@ pub fn ffmpeg(ffmpeg_path: &Path, args: &[&str]) -> Res<()> {
     let status = status?;
 
     if !status.success() {
-        return Err(format!(
-            "FFMPEG failed with status: {{{}}}",
-            status.code().map_or("TERMINATED".to_string(), |s| s.to_string())
-        )
-        .into());
+        return Err(CompilerError::Ffmpeg(status));
     }
 
     Ok(())
@@ -60,7 +57,7 @@ pub fn ffprobe(ffprobe_path: &Path, video_path: &str) -> Res<(u64, u64)> {
             .map(str::parse::<f64>)
             .collect::<Result<Vec<f64>, ParseFloatError>>()?[..]
     else {
-        return Err("Could not detect the stream's framerate".into());
+        return Err(CompilerError::Ffprobe);
     };
 
     let fps = number / denominator;
@@ -79,10 +76,7 @@ pub fn yt_dlp(ytdlp_path: &Path, url: &str, output: &str) -> Res<()> {
         .status()?;
 
     if !status.success() {
-        return Err(format!(
-            "{RED}yt-dlp failed to grab a video from {YELLOW}'{url}'{RESET}"
-        )
-        .into());
+        return Err(CompilerError::Ytdlp(url.to_string()));
     }
     Ok(())
 }

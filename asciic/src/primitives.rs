@@ -18,6 +18,7 @@ use zstd::encode_all;
 
 use crate::children::{ffprobe, yt_dlp};
 use crate::colours::{BCYAN, BDIM, BOLD, RESET, YELLOW};
+use crate::error::CompilerError;
 use crate::installer::Dependencies;
 use crate::{Res, children::ffmpeg, cli::Args};
 
@@ -39,18 +40,6 @@ pub enum Input {
     Image(PathBuf),
     YoutubeLink(String),
 }
-
-const FILE_STEM_NAN: &str = "\x1b[31m\
-Frame processing failed.
-One of the file stems was not a valid number.
-This might be an FFMPEG related issue.
-If you ever see this message, please open an \
-issue in https://github.com/S0raWasTaken/bad_apple \
-\x1b[0m";
-
-const ITERATION_LIMIT_ERR: &str = "\
-Iteration limit reached.
-This usually means that you set your uncompressed frame size too low.";
 
 const TEMPLATE: &str =
     "{msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})";
@@ -91,7 +80,7 @@ impl AsciiCompiler {
         let Some(dimensions) = terminal_size()
             .map(|(Width(w), Height(h))| (u32::from(w), u32::from(h)))
         else {
-            return Err("Could not detect the terminal's window size.".into());
+            return Err(CompilerError::TerminalSize);
         };
 
         let dependencies =
@@ -193,16 +182,17 @@ impl AsciiCompiler {
             .into_par_iter()
             .map(|entry| -> Res<(PathBuf, Vec<u8>)> {
                 if self.stop_handle.load(Relaxed) {
-                    return Err("Stopped.".into());
+                    return Err(CompilerError::Stopped);
                 }
 
                 // Early fail: filename must be a number
+
                 {
                     let _: u64 = entry
                         .file_stem()
                         .and_then(|s| s.to_str())
                         .and_then(|stem| stem.parse().ok())
-                        .ok_or(FILE_STEM_NAN)?;
+                        .ok_or(CompilerError::FileStemNan)?;
                 }
 
                 pb.inc(1);
@@ -215,7 +205,7 @@ impl AsciiCompiler {
                     && self.dynamic_compression
                 {
                     if threshold == u8::MAX {
-                        return Err(ITERATION_LIMIT_ERR.into());
+                        return Err(CompilerError::IterationLimit);
                     }
                     uncompressed_frame = self.make_frame(&entry, threshold)?;
                     threshold = threshold.saturating_add(2);

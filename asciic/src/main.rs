@@ -3,13 +3,12 @@
 use std::fs::remove_file;
 use std::process::exit;
 use std::sync::atomic::Ordering::SeqCst;
-use std::{
-    error::Error, fs::remove_dir_all, sync::Arc, thread::sleep, time::Duration,
-};
+use std::{fs::remove_dir_all, sync::Arc, thread::sleep, time::Duration};
 
 use clap::Parser;
 
 use crate::colours::RESET;
+use crate::error::CompilerError;
 use crate::{
     children::FFMPEG_RUNNING,
     cli::Args,
@@ -17,13 +16,15 @@ use crate::{
     primitives::AsciiCompiler,
 };
 
-type Res<T> = Result<T, Box<dyn Error + Send + Sync>>;
+type Res<T> = Result<T, CompilerError>;
 
 mod children;
 mod cli;
 mod colours;
+mod error;
 mod installer;
 mod primitives;
+
 fn main() -> Res<()> {
     let ascii_compiler = Arc::new(AsciiCompiler::new(Args::parse())?);
 
