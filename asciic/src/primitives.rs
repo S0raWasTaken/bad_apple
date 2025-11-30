@@ -48,6 +48,10 @@ If you ever see this message, please open an \
 issue in https://github.com/S0raWasTaken/bad_apple \
 \x1b[0m";
 
+const ITERATION_LIMIT_ERR: &str = "\
+Iteration limit reached.
+This usually means that you set your uncompressed frame size too low.";
+
 const TEMPLATE: &str =
     "{msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})";
 
@@ -67,6 +71,8 @@ pub struct AsciiCompiler {
     threshold: AtomicU8,
     filter_type: FilterType,
     background_brightness: f32,
+    frame_size_limit: usize,
+    dynamic_compression: bool,
 }
 
 impl AsciiCompiler {
@@ -95,6 +101,10 @@ impl AsciiCompiler {
 
         let background_brightness = args.background_brightness.clamp(0.0, 1.0);
 
+        let frame_size_limit = args.frame_size_limit * 1024;
+
+        let dynamic_compression = !args.skip_dynamic_compression;
+
         Ok(Self {
             stop_handle,
             temp_dir,
@@ -109,6 +119,8 @@ impl AsciiCompiler {
             threshold,
             filter_type,
             background_brightness,
+            frame_size_limit,
+            dynamic_compression,
         })
     }
 
@@ -173,6 +185,8 @@ impl AsciiCompiler {
             "{BDIM}[4/5]{RESET}  {BCYAN}Processing frames{RESET}"
         ));
 
+        let first_threshold = self.threshold.load(Relaxed);
+
         // The compiler wanted to end its own life, so I'm giving
         // this variable an explicit type.
         let mut frames: Vec<(PathBuf, Vec<u8>)> = frames
@@ -192,7 +206,21 @@ impl AsciiCompiler {
                 }
 
                 pb.inc(1);
-                let uncompressed_frame: String = self.make_frame(&entry)?;
+                let mut uncompressed_frame: String =
+                    self.make_frame(&entry, first_threshold)?;
+
+                let mut threshold = first_threshold.saturating_add(2);
+
+                while uncompressed_frame.len() > self.frame_size_limit
+                    && self.dynamic_compression
+                {
+                    if threshold == u8::MAX {
+                        return Err(ITERATION_LIMIT_ERR.into());
+                    }
+                    uncompressed_frame = self.make_frame(&entry, threshold)?;
+                    threshold = threshold.saturating_add(2);
+                }
+
                 Ok((
                     entry.clone(),
                     encode_all(uncompressed_frame.as_bytes(), 1)?,
@@ -249,23 +277,22 @@ impl AsciiCompiler {
     }
 
     #[inline]
-    fn make_frame(&self, frame: &PathBuf) -> Res<String> {
+    fn make_frame(&self, frame: &PathBuf, threshold: u8) -> Res<String> {
         Ok(AsciiBuilder::new(File::open(frame)?)
             .dimensions(self.dimensions.0, self.dimensions.1)
             .charset(&self.charset)
             .style(self.style)
             .colorize(self.colorize)
             .filter_type(self.filter_type)
-            .threshold(self.threshold.load(Relaxed))
+            .threshold(threshold)
             .background_brightness(self.background_brightness)
             .make_ascii()?)
     }
 
     #[inline]
     fn make_image(&self, image: &PathBuf) -> Res<()> {
-        self.threshold.store(0, Relaxed);
         File::create(self.output.clone())?
-            .write_all(self.make_frame(image)?.as_bytes())?;
+            .write_all(self.make_frame(image, 0)?.as_bytes())?;
         Ok(())
     }
 

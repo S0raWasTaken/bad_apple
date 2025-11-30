@@ -27,6 +27,7 @@ impl From<FilterType> for libasciic::FilterType {
     }
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug)]
 #[command(version(crate_version!()))]
 pub struct Args {
@@ -83,6 +84,15 @@ pub struct Args {
     /// Pass a custom brightness value. Clamped between 0..1
     #[arg(short, long = "bg-brightness", default_value = "0.2")]
     pub background_brightness: f32,
+
+    /// Value in KiB for the uncompressed size limit per frame.
+    #[arg(short = 'l', long = "limit", default_value = "550")]
+    pub frame_size_limit: usize,
+
+    /// Skips the new dynamic compression for videos entirely and
+    /// rely purely on the normal threshold
+    #[arg(long)]
+    pub skip_dynamic_compression: bool,
 }
 
 impl Args {
