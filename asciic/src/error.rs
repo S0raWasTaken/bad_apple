@@ -38,36 +38,40 @@ pub enum CompilerError {
     Stopped,
 }
 
+#[allow(clippy::enum_glob_use)]
+use CompilerError::*;
+
 impl Error for CompilerError {}
 
 impl Display for CompilerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let error_message = match self {
-            CompilerError::FileStemNan => FILE_STEM_NAN,
-            CompilerError::IterationLimit => ITERATION_LIMIT,
-            CompilerError::TerminalSize => TERMINAL_SIZE,
-            CompilerError::Ffprobe => FRAMERATE,
-            CompilerError::Stopped => "Stopped.",
-            CompilerError::Ffmpeg(status) => &format!(
+        match self {
+            FileStemNan => write!(f, "{FILE_STEM_NAN}"),
+            IterationLimit => write!(f, "{ITERATION_LIMIT}"),
+            TerminalSize => write!(f, "{TERMINAL_SIZE}"),
+            Ffprobe => write!(f, "{FRAMERATE}"),
+            Stopped => write!(f, "Stopped."),
+            Ffmpeg(status) => write!(
+                f,
                 "FFMPEG failed with status: {{{}}}",
                 status
                     .code()
-                    .map_or("TERMINATED".to_string(), |s| s.to_string())
+                    .map_or_else(|| "TERMINATED".into(), |s| s.to_string())
             ),
-            CompilerError::Ytdlp(url) => &format!(
+            Ytdlp(url) => write!(
+                f,
                 "{RED}yt-dlp failed to grab a video from {YELLOW}'{url}'{RESET}"
             ),
-            CompilerError::CtrlC(error) => &error.to_string(),
-            CompilerError::HomeDir(error) => &error.to_string(),
-            CompilerError::Io(error) => &error.to_string(),
-            CompilerError::ParseFloat(error) => &error.to_string(),
-            CompilerError::Reqwest(error) => &error.to_string(),
-            CompilerError::Template(error) => &error.to_string(),
-            CompilerError::Utf8(error) => &error.to_string(),
-            CompilerError::Ascii(error) => &error.to_string(),
-            CompilerError::Ron(error) => &error.to_string(),
-        };
-        write!(f, "{error_message}")
+            CtrlC(e) => write!(f, "{e}"),
+            HomeDir(e) => write!(f, "{e}"),
+            Io(e) => write!(f, "{e}"),
+            ParseFloat(e) => write!(f, "{e}"),
+            Reqwest(e) => write!(f, "{e}"),
+            Template(e) => write!(f, "{e}"),
+            Utf8(e) => write!(f, "{e}"),
+            Ascii(e) => write!(f, "{e}"),
+            Ron(e) => write!(f, "{e}"),
+        }
     }
 }
 
