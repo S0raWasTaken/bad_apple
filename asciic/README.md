@@ -73,6 +73,7 @@ Options:
           - fg-paint: Paint the foreground (characters) with RGB colors. Characters vary based on brightness, and each character is colored
           - bg-paint: Paint the background with RGB colors while keeping characters visible. Characters vary based on brightness with colored backgrounds
           - bg-only:  Paint only the background with RGB colors using space characters. Creates a purely color-based representation without visible ASCII characters
+          - mixed:    Paint both background and foreground. It darkens the background by a configurable percentage, so you can actually see the foreground characters
           
           [default: bg-only]
 
@@ -96,6 +97,19 @@ Options:
           
           [default: nearest]
           [possible values: nearest, triangle, catmull-rom, gaussian, lanczos3]
+
+  -b, --bg-brightness <BACKGROUND_BRIGHTNESS>
+          Pass a custom brightness value. Clamped between 0..1
+          
+          [default: 0.2]
+
+  -l, --limit <FRAME_SIZE_LIMIT>
+          Value in KiB for the uncompressed size limit per frame
+          
+          [default: 550]
+
+      --skip-dynamic-compression
+          Skips the new dynamic compression for videos entirely and rely purely on the normal threshold
 
   -h, --help
           Print help (see a summary with '-h')

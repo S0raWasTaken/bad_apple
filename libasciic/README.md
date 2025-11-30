@@ -17,7 +17,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-libasciic = "1.0.1"
+libasciic = "1.1.0"
 ```
 
 ## Quick Start
@@ -29,7 +29,7 @@ use libasciic::{AsciiBuilder, Style};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open("image.png")?;
     
-    let ascii = AsciiBuilder::new(file)?
+    let ascii = AsciiBuilder::new(file)
         .dimensions(80, 40)
         .colorize(true)
         .style(Style::FgPaint)
@@ -49,7 +49,7 @@ use std::fs::File;
 use libasciic::AsciiBuilder;
 
 let file = File::open("photo.jpg")?;
-let ascii = AsciiBuilder::new(file)?
+let ascii = AsciiBuilder::new(file)
     .dimensions(100, 50)
     .make_ascii()?;
 
@@ -63,11 +63,11 @@ use std::fs::File;
 use libasciic::{AsciiBuilder, Style};
 
 let file = File::open("image.png")?;
-let ascii = AsciiBuilder::new(file)?
+let ascii = AsciiBuilder::new(file)
     .dimensions(120, 60)
     .colorize(true)
     .style(Style::BgPaint)
-    .charset(".:;+=xX$@")?
+    .charset(".:;+=xX$@")
     .threshold(10)  // Reduce output size
     .make_ascii()?;
 
@@ -81,7 +81,7 @@ use std::fs::File;
 use libasciic::{AsciiBuilder, Style};
 
 let file = File::open("artwork.png")?;
-let ascii = AsciiBuilder::new(file)?
+let ascii = AsciiBuilder::new(file)
     .dimensions(80, 40)
     .colorize(true)
     .style(Style::BgOnly)
@@ -97,7 +97,7 @@ use std::fs::File;
 use libasciic::{AsciiBuilder, FilterType};
 
 let file = File::open("photo.jpg")?;
-let ascii = AsciiBuilder::new(file)?
+let ascii = AsciiBuilder::new(file)
     .dimensions(150, 75)
     .filter_type(FilterType::Lanczos3)
     .colorize(true)
@@ -114,11 +114,11 @@ The main builder struct for creating ASCII art. All methods are chainable.
 
 #### Methods
 
-- **`new(image: R) -> Result<Self>`** - Create a new builder from an image source
+- **`new(image: R) -> Self`** - Create a new builder from an image source
 - **`dimensions(width: u32, height: u32) -> Self`** - Set output dimensions (required)
 - **`colorize(bool) -> Self`** - Enable/disable ANSI color output
 - **`style(Style) -> Self`** - Set the color style
-- **`charset(&str) -> Result<Self>`** - Set custom character set for brightness mapping
+- **`charset(&str) -> Self`** - Set custom character set for brightness mapping
 - **`threshold(u8) -> Self`** - Set color compression threshold (0-255)
 - **`filter_type(FilterType) -> Self`** - Set image resampling filter
 - **`make_ascii(self) -> Result<String>`** - Generate the ASCII art
@@ -138,7 +138,7 @@ The default character set is `.:-+=#@`, ordered from darkest to brightest. A spa
 Custom character sets can be provided in the same format:
 
 ```rust
-.charset(".'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$")?
+.charset(".'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$")
 ```
 
 ### Compression Threshold
