@@ -41,7 +41,22 @@ pub enum CompilerError {
 #[allow(clippy::enum_glob_use)]
 use CompilerError::*;
 
-impl Error for CompilerError {}
+impl Error for CompilerError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            CtrlC(e) => Some(e),
+            HomeDir(e) => Some(e),
+            Io(e) => Some(e),
+            ParseFloat(e) => Some(e),
+            Reqwest(e) => Some(e),
+            Template(e) => Some(e),
+            Utf8(e) => Some(e),
+            Ascii(e) => Some(e),
+            Ron(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 impl Display for CompilerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
