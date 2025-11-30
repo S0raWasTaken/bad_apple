@@ -38,7 +38,7 @@ use image::{GenericImageView, ImageReader};
 
 pub use image::imageops::FilterType;
 
-use crate::error::AsciiError;
+pub use crate::error::AsciiError;
 
 type Res<T> = Result<T, AsciiError>;
 /// Defines how colors are applied to ASCII art output.
