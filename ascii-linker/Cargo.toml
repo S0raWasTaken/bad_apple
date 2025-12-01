@@ -1,0 +1,21 @@
+[package]
+name = "ascii-linker"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+authors = ["S0ra <S0raWasTaken>"]
+description = "A procedural macro library to embed a .bapple file into a Rust binary."
+repository = "https://github.com/S0raWasTaken/bad_apple"
+documentation = "https://docs.rs/ascii-linker"
+homepage = "https://github.com/S0raWasTaken/bad_apple"
+readme = "README.md"
+keywords = ["ascii", "ascii-art", "image", "terminal", "ansi"]
+categories = ["multimedia::images", "command-line-interface", "rendering"]
+rust-version = "1.88.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+tar = "0.4.44"
+zstd = "0.13.3"

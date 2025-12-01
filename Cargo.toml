@@ -2,7 +2,7 @@
 resolver = "3"
 members = [
 	"asciic",
-	"asciild",
+	"ascii-linker",
 	"bplay", 
 	"libasciic"
 ]

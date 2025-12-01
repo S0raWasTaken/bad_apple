@@ -137,6 +137,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ascii-linker"
+version = "1.0.0"
+dependencies = [
+ "tar",
+ "zstd",
+]
+
+[[package]]
 name = "asciic"
 version = "2.1.0"
 dependencies = [
@@ -156,10 +164,6 @@ dependencies = [
  "which",
  "zstd",
 ]
-
-[[package]]
-name = "asciild"
-version = "0.1.0"
 
 [[package]]
 name = "atomic-waker"
