@@ -5,7 +5,7 @@
 //!
 //! ## Overview
 //!
-//! This crate provides the `link_bapple!` macro which reads a `.bapple` file (a tar archive
+//! This crate provides the `link_frames!` macro which reads a `.bapple` file (a tar archive
 //! containing zstd-compressed ASCII art frames) and converts it into a static string array
 //! that can be embedded in your compiled binary.
 //!
@@ -19,10 +19,10 @@
 //! ## Example
 //!
 //! ```rust
-//! use ascii_linker::link_bapple;
+//! use ascii_linker::link_frames;
 //!
 //! // Embed frames at compile time
-//! const FRAMES: &[&str] = link_bapple!("./animations/bad_apple.bapple");
+//! const FRAMES: &[&str] = link_frames!("./animations/bad_apple.bapple");
 //!
 //! fn main() {
 //!     // Iterate through frames
@@ -33,6 +33,8 @@
 //! ```
 
 use proc_macro::TokenStream;
+use ron::de::from_bytes;
+use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
 use tar::{Archive, Entry};
@@ -72,10 +74,10 @@ use zstd::decode_all;
 /// # Examples
 ///
 /// ```no_run
-/// use ascii_linker::link_bapple;
+/// use ascii_linker::link_frames;
 ///
 /// // Basic usage - embed animation frames
-/// const FRAMES: &[&str] = link_bapple!("./path/to/animation.bapple");
+/// const FRAMES: &[&str] = link_frames!("./path/to/animation.bapple");
 ///
 /// // Access individual frames
 /// println!("{}", FRAMES[0]);
@@ -91,11 +93,11 @@ use zstd::decode_all;
 /// - The path is relative to the crate root where `Cargo.toml` is located
 /// - This is ideal for bundling small to medium-sized ASCII animations
 #[proc_macro]
-pub fn link_bapple(items: TokenStream) -> TokenStream {
+pub fn link_frames(items: TokenStream) -> TokenStream {
     let file_path = items.into_iter().next().unwrap();
+    let path_str = file_path.to_string().trim_matches('"').to_string();
 
-    let mut tar: Archive<File> =
-        Archive::new(File::open(file_path.to_string()).unwrap());
+    let mut tar: Archive<File> = Archive::new(File::open(path_str).unwrap());
 
     let mut ret = String::from("&[");
 
@@ -119,4 +121,88 @@ pub fn link_bapple(items: TokenStream) -> TokenStream {
     }
     ret.push(']');
     ret.parse().unwrap()
+}
+
+/// const BAPPLE: (&[&[u8]], &[u8], u64) = embed_full!("./path/to/file.bapple");
+#[proc_macro]
+pub fn embed_full(items: TokenStream) -> TokenStream {
+    let file_path = items.into_iter().next().unwrap();
+    let path_str = file_path.to_string().trim_matches('"').to_string();
+
+    let mut audio = Vec::new();
+    let mut frametime = 0;
+
+    let compressed_frames = Archive::new(File::open(path_str).unwrap())
+        .entries()
+        .unwrap()
+        .filter_map(|e| process_frames(e, &mut audio, &mut frametime))
+        .collect::<Vec<_>>();
+
+    if frametime == 0 {
+        panic!(
+            ".bapple file is too old or it's corrupted.\n\
+            Couldn't fetch the frametime info."
+        );
+    }
+
+    let mut audio_ret = String::from("&[");
+
+    for byte in audio {
+        audio_ret.push_str(&format!("{byte},"));
+    }
+    audio_ret.push(']');
+
+    let mut compressed_frames_ret = String::from("&[");
+
+    for frame_bytes in compressed_frames {
+        let mut frame = String::from("&[");
+        for byte in frame_bytes {
+            frame.push_str(&format!("{byte},"));
+        }
+        frame.push(']');
+        compressed_frames_ret.push_str(&format!("{frame},"));
+    }
+    compressed_frames_ret.push(']');
+
+    format!("{compressed_frames_ret},{audio_ret},{frametime})").parse().unwrap()
+}
+
+// Borrowed from `bplay`
+fn process_frames(
+    entry: Result<Entry<'_, File>, std::io::Error>,
+    audio: &mut Vec<u8>,
+    outer_frametime: &mut u64,
+) -> Option<Vec<u8>> {
+    let mut entry = entry.ok()?;
+    let file_stem = entry.header().path().ok()?.file_stem()?.to_os_string();
+
+    let mut content = Vec::new();
+    entry.read_to_end(&mut content).ok()?;
+
+    if file_stem == *"audio" {
+        *audio = content;
+
+        return None;
+    } else if file_stem == *"metadata" {
+        let Metadata { frametime, fps } =
+            from_bytes(&content).unwrap_or_default();
+        if frametime != 0 {
+            *outer_frametime = frametime;
+        } else if fps != 0 {
+            // DEPRECATED
+            *outer_frametime = 1_000_000 / fps;
+        }
+        // No further processing, since this can be
+        // overriden by the FPS arg
+        return None;
+    }
+
+    Some(content)
+}
+
+#[derive(Deserialize, Default)]
+struct Metadata {
+    frametime: u64,
+    /// DEPRECATED
+    fps: u64,
 }
