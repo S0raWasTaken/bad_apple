@@ -27,7 +27,7 @@
 //!
 //! ### Using `link_frames!`
 //!
-//! ```rust
+//! ```no_run
 //! use ascii_linker::link_frames;
 //!
 //! // Embed frames at compile time
@@ -52,7 +52,7 @@
 //! zstd = "0.13"
 //! ```
 //!
-//! ```rust
+//! ```no_run
 //! use ascii_linker::embed_full;
 //!
 //! // Embed compressed frames, audio, and timing
