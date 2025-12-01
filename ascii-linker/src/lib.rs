@@ -332,8 +332,6 @@ fn process_frames(
             // DEPRECATED
             *outer_frametime = 1_000_000 / fps;
         }
-        // No further processing, since this can be
-        // overriden by the FPS arg
         return None;
     }
 
