@@ -163,7 +163,7 @@ pub fn link_frames(items: TokenStream) -> TokenStream {
         let frame_as_str =
             String::from_utf8(decode_all(&*content).unwrap()).unwrap();
 
-        write!(ret, "\"{frame_as_str}\",").unwrap();
+        write!(ret, "{frame_as_str:?},").unwrap();
     }
     ret.push(']');
     ret.parse().unwrap()
