@@ -13,6 +13,10 @@ A series of crates that I made to compile images and videos into playable ascii<
 <img width="765" height="412" alt="image" src="https://github.com/user-attachments/assets/69be5e11-928f-405c-ba20-c52fb6224acd" />
 <img width="765" height="412" alt="image" src="https://github.com/user-attachments/assets/d2447b34-2e35-45ea-b4d8-94ad0c6c04e3" />
 
+## Related projects
+- **[abc](https://github.com/S0raWasTaken/ascii-binary-compiler)**: A tool to convert `.bapple`s into actual binaries.
+- **[ascii-bot](https://github.com/S0raWasTaken/ASCII-Bot)**: A Discord bot to convert images into ASCII art.
+
 ## Copying
 Everything in this repository is licensed under the [MIT](LICENSE) license.<br>
 TL;DR do whatever you want ¯\\\_(ツ)_/¯
