@@ -17,5 +17,5 @@ rust-version = "1.88.0"
 clap = ["dep:clap"]
 
 [dependencies]
-clap = { version = "4.5.52", features = ["derive"], optional = true }
 image = "0.25.9"
+clap = { version = "4.5.52", optional = true , default-features = false }
