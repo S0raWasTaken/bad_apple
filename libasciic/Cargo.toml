@@ -18,4 +18,4 @@ clap = ["dep:clap"]
 
 [dependencies]
 image = "0.25.9"
-clap = { version = "4.5.52", optional = true , default-features = false }
+clap = { version = "4.5.52", optional = true , default-features = false, features = ["derive"] }
