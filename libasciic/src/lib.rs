@@ -265,28 +265,41 @@ impl<R: Read + Seek> AsciiBuilder<R> {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - Dimensions have not been set (are `(0, 0)`)
+    /// - Dimensions have not been set (on default feature `resize`)
     /// - Image format cannot be determined
     /// - Image decoding fails
     pub fn make_ascii(self) -> Res<String> {
+        #[cfg(feature = "resize")]
         if self.dimensions.0 == 0 || self.dimensions.1 == 0 {
             return Err(AsciiError::DimensionsNotSet);
         }
 
-        let resized_image = ImageReader::new(self.image)
-            .with_guessed_format()?
-            .decode()?
-            .resize_exact(
-                self.dimensions.0,
-                self.dimensions.1,
-                self.filter_type,
-            );
+        let resized_image =
+            ImageReader::new(self.image).with_guessed_format()?.decode()?;
+
+        let dimensions = {
+            #[cfg(feature = "resize")]
+            {
+                self.dimensions
+            }
+            #[cfg(not(feature = "resize"))]
+            {
+                resized_image.dimensions()
+            }
+        };
+
+        #[cfg(feature = "resize")]
+        let resized_image = resized_image.resize_exact(
+            dimensions.0,
+            dimensions.1,
+            self.filter_type,
+        );
 
         let mut frame = String::new();
         let mut last_colorized_pixel = resized_image.get_pixel(0, 0).0;
 
-        for y in 0..self.dimensions.1 {
-            for x in 0..self.dimensions.0 {
+        for y in 0..dimensions.1 {
+            for x in 0..dimensions.0 {
                 let current_pixel = resized_image.get_pixel(x, y).0;
                 let [r, g, b, _] = current_pixel;
                 let brightness = r.max(g).max(b);
@@ -323,7 +336,7 @@ impl<R: Read + Seek> AsciiBuilder<R> {
                 frame.push_str("\x1b[0m");
             }
 
-            if y != self.dimensions.1 - 1 {
+            if y != dimensions.1 - 1 {
                 frame.push('\n');
             }
         }
